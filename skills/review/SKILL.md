@@ -36,6 +36,18 @@ Every request sent to Codex or Cursor **MUST** include both sentences verbatim:
 
 ## Workflow
 
+### Phase 0: Delegate to a Background Subagent
+
+External review tools take minutes to respond. Never run them inline in the main conversation — the user's session would block with no visible progress.
+
+**If you are the main conversation agent**: do not execute Phases 1–6 yourself. Instead:
+
+1. Launch a background subagent that inherits the conversation context (Claude Code: `Agent` tool with `subagent_type: "fork"`). Prompt it with: "You are the review subagent. Read <absolute path to this SKILL.md> and execute its workflow from Phase 1 onward. Scope: <scope from the user's request>. Report findings only — do not modify any files."
+2. Tell the user in one line that the review is running in the background, then return control immediately. Continue other pending work; do not wait for the review.
+3. When the subagent's completion notification arrives, relay its report to the user as-is (do not re-run the review), then handle fix application per Phase 6.
+
+**If you are the review subagent**: skip this phase and execute Phases 1–6 directly. Never apply fixes yourself — produce the report only; the main agent owns file changes.
+
 ### Phase 1: Determine Scope
 
 If `$ARGUMENTS` specifies files or a scope, use that. Otherwise default to changed files since the last commit:
