@@ -18,6 +18,9 @@ gh skill install rerelurelu/skillbox decomposition --agent claude-code --scope u
 gh skill install rerelurelu/skillbox dig --agent claude-code --scope user
 gh skill install rerelurelu/skillbox fix-ci --agent claude-code --scope user
 gh skill install rerelurelu/skillbox creating-skills --agent claude-code --scope user
+gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
+gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
+gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
 ```
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
@@ -33,6 +36,9 @@ Replace `--agent claude-code` with `--agent github-copilot` (or any other suppor
 | [dig](skills/dig/SKILL.md) | Deep exploratory interview to surface hidden assumptions and risks in plans |
 | [fix-ci](skills/fix-ci/SKILL.md) | Automatically diagnoses and fixes CI failures in the current PR |
 | [creating-skills](skills/creating-skills/SKILL.md) | Authors new Agent Skills following the agentskills.io specification |
+| [memo](skills/memo/SKILL.md) | Records tech knowledge, design decisions, domain knowledge, and coding tendencies to a personal knowledge base (`~/dev/knowledge`, Obsidian vault) |
+| [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
+| [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
 
 ## Updating
 
