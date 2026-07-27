@@ -66,11 +66,25 @@ Examine the scope and classify:
 - **Design** — architecture docs, design decisions
 - **Code** — source code files (default)
 
+Read `skills/review/references/<type>.md` (plan.md / design.md / code.md) for this type's review criteria and severity guidance. Use it in Phase 3 and Phase 5.
+
 ### Phase 3: Execute Reviews
 
 1. Read `.claude/settings.json` in the project root. If it contains `"cursorEnabled": true`, Cursor will also be used.
-2. Compose the review prompt including both mandatory prompt rules.
-3. Execute:
+2. For Code and Design scopes, gather dependency/version info from manifest or lockfiles present in the repo (e.g. `package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `Gemfile`). Summarize concisely — this lets the tool judge whether APIs used are deprecated or non-idiomatic for the actual versions in use.
+3. Detect which domain(s) the scope touches, from file paths/extensions:
+   - **fe** — `.tsx`/`.jsx`/`.vue`/`.svelte`, `components/`, `styles/`, `.css`/`.scss`
+   - **be** — `server/`, `api/`, `controllers/`, `models/`, `.sql`, ORM/migration files
+   - **infra** — `Dockerfile`, `docker-compose*`, `*.tf`, k8s manifests, `.github/workflows/`
+   For each detected domain, read `skills/review/references/domains/<domain>.md` if it exists. These criteria are **additive** to the type criteria from Phase 2 — they supplement, not replace, `references/<type>.md`. Multiple domains may apply to one scope.
+4. Check for project convention or decision docs (e.g. `docs/adr/`, `CONTRIBUTING.md`, `CLAUDE.md`). If present, instruct the tool to review against them.
+5. Compose the review prompt including:
+   - Both mandatory prompt rules
+   - The criteria from `references/<type>.md` read in Phase 2
+   - The domain criteria from step 3, when applicable
+   - The dependency/version summary from step 2, when gathered
+   - The convention-doc instruction from step 4, when applicable
+6. Execute:
    - **Codex only** (default): single Bash call
    - **Codex + Cursor**: two independent Bash calls in parallel
 
@@ -95,14 +109,7 @@ Review every finding yourself.
 
 ### Phase 5: Classify and Filter
 
-Assign severity to each surviving finding:
-
-| Severity | Action | Criteria |
-|----------|--------|----------|
-| **CRITICAL** | Must fix | Bugs, security vulnerabilities, data loss, crashes |
-| **HIGH** | Must fix | Design flaws, race conditions, significant logic errors |
-| **MEDIUM** | Consider | Performance, maintainability, minor logic gaps |
-| **LOW** | Skip | Style preferences, minor nitpicks, cosmetic issues |
+Assign severity to each surviving finding using the severity table from `references/<type>.md` (read in Phase 2).
 
 Drop all LOW findings.
 
