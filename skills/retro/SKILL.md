@@ -1,7 +1,7 @@
 ---
 name: retro
 description: "知識倉庫 (~/dev/knowledge) に溜まった記録を総括して、強み・傾向・課題の振り返りレポートを作る。ユーザーが「振り返りたい」「retro」「最近の自分どう？」と言ったときに使う。引数で期間やテーマを絞れる（例: /retro 直近1ヶ月、/retro 苦手だけ）。"
-version: "1.0.0"
+version: "1.1.0"
 user-invocable: true
 allowed-tools: "Read Bash Grep Glob"
 license: "GPL-3.0"

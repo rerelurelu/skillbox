@@ -1,7 +1,7 @@
 ---
 name: memo
 description: "セッション中に得た技術知識・設計判断・ドメイン知識・ユーザーのコーディングのクセ・長所・苦手を知識倉庫 (~/dev/knowledge、Obsidian vault) に記録する。次のイベントの直後に必ず使う: コミットした直後、PR をマージした直後、レビュー指摘への対応が完了した直後、設計判断が確定した直後、非自明な挙動やハマりの原因が判明した直後、ユーザーの良い判断・つまずき・傾向を観測した直後。また「メモして」「記録して」と言われたときに使う。"
-version: "1.1.0"
+version: "1.2.0"
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Grep Glob"
 license: "GPL-3.0"
