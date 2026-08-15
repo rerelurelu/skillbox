@@ -121,13 +121,17 @@ herdr pane split --pane "$HERDR_PANE_ID" --direction down --no-focus --cwd <repo
 ```bash
 herdr pane rename <pane_id> "team-review"
 for i in 1 2 3 4 5; do
-  herdr agent start team-review --kind claude --pane <pane_id> && break
+  herdr agent start team-review --kind claude --pane <pane_id> -- --model sonnet && break
   sleep 2
 done
 herdr agent wait <pane_id> --until idle --timeout 60000
 ```
 
 **Retry `agent start`.** Immediately after `pane split` the pane's shell has not reached its prompt yet and `agent start` fails with `agent_not_found`. It succeeds on the second attempt.
+
+**Run the coordinator on `sonnet`.** Without `--model` the pane inherits the user's default, which is typically the largest model, and one review then runs three sessions of it: this pane plus the reviewer subagents it spawns. The coordinator's work is sequencing and routing, not judgement about the code. The findings come from Codex and from `cc-reviewer`, and Phase 3 puts those back on `opus` explicitly — a subagent inherits its parent's model, so without that override the whole team would drop to `sonnet` along with the coordinator.
+
+Use bare aliases throughout, never a pinned name like `claude-sonnet-5`: aliases resolve to the newest model in that family, so these lines need no editing when models change.
 
 Then submit the instruction:
 
@@ -229,7 +233,7 @@ test -f .claude/skills/self-review/SKILL.md || test -f ~/.claude/skills/self-rev
 
 Checking only the user scope reports "not installed" for a project-scoped or plugin-provided skill, and the Phase 6 report then claims a reviewer was unavailable when it was not.
 
-**5. Launch the reviewers in parallel** with the `Agent` tool, each with a `name` so it can be reached during the debate:
+**5. Launch the reviewers in parallel** with the `Agent` tool, each with a `name` so it can be reached during the debate, and each with `model: "opus"`. You are running on `sonnet`, and a subagent inherits its parent's model unless told otherwise — the coordinator is cheap on purpose, the reviewers are not.
 
 - `name: "codex-reviewer"` — runs Codex with the briefing, returns findings.
 - `name: "cc-reviewer"` — invokes the `code-review` skill via the Skill tool at level `high`, returns findings. Its prompt must also carry this line:
