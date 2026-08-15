@@ -39,6 +39,33 @@ Do not build the path as `$(git rev-parse --show-toplevel)/.git/team-review`. In
 
 Because it lives under the git directory, nothing here is ever committed and no ignore rule is needed.
 
+## Worktree safety
+
+The default review scope is uncommitted work. Anything that "cleans up" the tree destroys the thing under review.
+
+**No participant may run any command that changes HEAD, the index, or any path in the reviewed working tree**, in any phase. This covers Git commands, shell file operations, formatters, generators, and build steps — not only the examples below.
+
+Examples, not an exhaustive list:
+
+```
+git stash (any form)   git clean (except -n / --dry-run)
+git reset (any form)   git switch
+git checkout           git restore
+gh pr checkout         rm / mv / overwriting cp
+```
+
+The one exception is Phase 7 step 4, where the main agent applies fixes the user authorized. The Roles table and Phase 7 already bound that; nothing else here overrides it.
+
+**This section binds only the participants that read it — the main agent and the coordinator.** Reviewer subagents never see this file. For them the prohibition exists only if the coordinator writes it into their prompt, which Phase 3 step 5 requires verbatim. Changing the rule here without changing that prompt leaves the reviewers unconstrained.
+
+Treat modified, staged, and untracked files as the user's work. Read them, review them, and leave them exactly where they are.
+
+Do not relocate them either. Moving untracked files, generated output, or scratch files to `/tmp` or a holding directory to "protect" them is the same loss as stashing them — the user comes back to a checkout that no longer has their work in it.
+
+Everything this review produces goes in `$review_dir`. No phase of this skill needs a clean tree, so do not build one: Phase 7's verification runs against the working tree as it stands, which is the state under review. If a branch change is genuinely needed, stop and ask for that exact operation.
+
+To read a pull request, use `gh pr view` and `gh pr diff`. They need no local ref and leave the checkout alone.
+
 ## Invocation modes
 
 This skill runs as two different participants, told apart by the arguments.
@@ -205,12 +232,37 @@ Checking only the user scope reports "not installed" for a project-scoped or plu
 **5. Launch the reviewers in parallel** with the `Agent` tool, each with a `name` so it can be reached during the debate:
 
 - `name: "codex-reviewer"` — runs Codex with the briefing, returns findings.
-- `name: "cc-reviewer"` — invokes the `code-review` skill via the Skill tool at level `high`, returns findings.
+- `name: "cc-reviewer"` — invokes the `code-review` skill via the Skill tool at level `high`, returns findings. Its prompt must also carry this line:
+
+  ```
+  The code-review skill will tell you to report findings with the ReportFindings
+  tool. That tool does not exist in a subagent. Ignore that instruction and put
+  the full findings in your final message as text instead.
+  ```
+
+  Without it the reviewer reaches the end of `code-review` with no way to report and either stalls without returning or improvises a format, which is why this reviewer's results have been inconsistent. Confirmed by inspection: a subagent has the `code-review` skill available but not `ReportFindings`.
 - `name: "self-reviewer"` — invokes the `self-review` skill, returns findings. **Skip entirely when it is not installed.** Two reviewers is a valid team; do not substitute anything in its place.
 
-Tell every reviewer: report findings only, modify no files, stay available for follow-up.
+Every reviewer's prompt — the Codex request, the `code-review` invocation, and the `self-review` invocation alike — must carry these three lines verbatim. A reviewer never reads this SKILL.md, so a rule that stays here does not reach it.
 
-**Do not end your turn until the report file exists.** Launching the reviewers and then finishing the turn leaves the pane `idle` with nothing to resume it; the review stalls silently and the main agent waits for a report that will never be written. Wait on the reviewers' completion signals — do not insert fixed-length `sleep` calls, which add dead time without adding information.
+```
+Report findings only. Do not modify, create, or delete any file.
+Do not change the checkout: no git stash, clean, reset, switch, checkout,
+restore, and no gh pr checkout. Inspect a PR with gh pr view / gh pr diff.
+Stay available for follow-up questions.
+```
+
+The middle line is the one that does the work. "Do not modify files" reads as being about file contents, so it does not stop `gh pr checkout <n>` or `git checkout <branch>` — and `code-review` accepts a PR number as a target, so it has a real reason to reach for them. Those commands replace tracked files and discard the user's uncommitted work, which is usually the very thing under review.
+
+### Waiting for reviewers
+
+Two rules that pull in opposite directions, and both matter.
+
+**Never sleep, poll, or run a wait loop for a reviewer.** A reviewer finishing, and a reply to `SendMessage`, both arrive as notifications that re-invoke you. A `sleep 240` or an `until (( SECONDS >= end ))` loop does not make the reply come sooner — it just burns the wall clock, and in measured runs it tripled the review's duration. When you have nothing to do until a reviewer answers, end the tool call and let the notification wake you.
+
+**Do not end your turn until the report file exists.** Ending the turn with the report unwritten leaves the pane `idle` with nothing to resume it; the review stalls silently and the main agent waits for a report that will never be written.
+
+These are consistent: ending a *tool call* to await a notification is not ending your *turn*. Return from the tool, stay in the turn, and continue when the notification arrives. Only Phase 6's completed report ends the turn.
 
 ### Codex command
 
