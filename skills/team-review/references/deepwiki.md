@@ -2,7 +2,7 @@
 
 レビュアーの学習データより新しいバージョンを使っている場合、そのバージョンでの推奨実装をレビュアーは知らない。知らないことに気づかないまま「問題なし」と判断するか、古いバージョンの知識で誤った指摘を出す。deepwiki MCP は GitHub リポジトリのソースとドキュメントを直接読んで答えるため、この穴を埋められる。
 
-deepwiki MCP が使えないときは、この手順を丸ごとスキップする。スキップしたことは Phase 6 のレポートに 1 行書く（黙って落とすと、確認したのかしていないのか分からなくなる）。
+deepwiki MCP が使えないときは、この手順を丸ごとスキップする。スキップしたことはレポートに 1 行書く（黙って落とすと、確認したのかしていないのか分からなくなる）。
 
 ## 対象
 
@@ -118,7 +118,7 @@ Answer for v<version> specifically, not for the latest release.
 
 ### 用途別テンプレート
 
-**(a) 事前確認（Phase 3・ブリーフィング作成時）**
+**(a) 事前確認（ブリーフィング作成時）**
 
 ```
 In <name> v<version>, what are the recommended APIs and patterns for <スコープで使っている機能>?
@@ -126,7 +126,7 @@ Which APIs were recommended in earlier versions but are deprecated or discourage
 Answer for v<version> specifically, not for the latest release.
 ```
 
-**(b) 指摘の裏取り（Phase 4・議論時）**
+**(b) 指摘の裏取り（議論時）**
 
 ```
 In <name> v<version>, is `<API名>` deprecated or discouraged?
@@ -139,7 +139,7 @@ Answer for v<version> specifically, not for the latest release.
 
 ## 手順 4: 結果の扱い
 
-**Phase 3（ブリーフィング）**: deepwiki の回答は上流ドキュメント由来の事実として、出典を明記してブリーフィングに載せる。
+**ブリーフィング作成時**: deepwiki の回答は上流ドキュメント由来の事実として、出典を明記してブリーフィングに載せる。
 
 ```
 【deepwiki: honojs/hono v4.13.2 について】
@@ -148,7 +148,7 @@ Answer for v<version> specifically, not for the latest release.
 
 判断（「だからこの実装は正しい」）は書かない。事実だけ渡す。
 
-**Phase 4（議論）**: バージョン整合性に関する指摘は、deepwiki の回答を証拠として提出させる。
+**議論時**: バージョン整合性に関する指摘は、deepwiki の回答を証拠として提出させる。
 
 - 裏が取れた → 指摘を維持し、レポートに deepwiki の該当箇所を引用する
 - 否定された → 指摘を取り下げる
