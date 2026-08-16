@@ -13,6 +13,7 @@ Install all skills at user scope for Claude Code:
 ```bash
 gh skill install rerelurelu/skillbox deslop --agent claude-code --scope user
 gh skill install rerelurelu/skillbox team-review --agent claude-code --scope user
+gh skill install rerelurelu/skillbox team-review-copilot --agent github-copilot --scope user
 gh skill install rerelurelu/skillbox clean-code --agent claude-code --scope user
 gh skill install rerelurelu/skillbox decomposition --agent claude-code --scope user
 gh skill install rerelurelu/skillbox dig --agent claude-code --scope user
@@ -31,7 +32,8 @@ Replace `--agent claude-code` with `--agent github-copilot` (or any other suppor
 | Skill | Purpose |
 |-------|---------|
 | [deslop](skills/deslop/SKILL.md) | Removes AI-generated slop from uncommitted changes |
-| [team-review](skills/team-review/SKILL.md) | Runs Codex, the built-in code-review skill, and self-review over one scope in a facilitated debate, then hands the surviving findings to the main agent to filter, fix, and report |
+| [team-review](skills/team-review/SKILL.md) | Runs Codex, the built-in code-review skill, and self-review as Claude Code teammates over one scope in a facilitated debate, then hands the surviving findings to the main agent to filter, fix, and report (needs agent teams enabled) |
+| [team-review-copilot](skills/team-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: two Codex reviewers with different lenses plus a Copilot subagent reviewer, debated and triaged by the host session (needs the `codex` CLI) |
 | [clean-code](skills/clean-code/SKILL.md) | Post-implementation polish: simplify → deslop → dead-code/comment audit |
 | [decomposition](skills/decomposition/SKILL.md) | Decomposes complex tasks into atomic, executable todos |
 | [dig](skills/dig/SKILL.md) | Deep exploratory interview to surface hidden assumptions and risks in plans |
