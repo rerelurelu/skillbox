@@ -8,7 +8,24 @@ This repository contains a collection of [Agent Skills](https://agentskills.io/s
 
 ## Installation
 
-Install all skills at user scope for Claude Code:
+Two ways in. They coexist: install whichever fits the agent you are using.
+
+### Claude Code plugin
+
+Installs every skill except `team-review-copilot` (that one only runs inside GitHub Copilot CLI) in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
+
+```
+/plugin marketplace add rerelurelu/skillbox
+/plugin install relubox@skillbox
+```
+
+Update with `/plugin marketplace update skillbox`.
+
+Note that Copilot CLI does not read `~/.claude/plugins/`, so a plugin install does not make these skills available there. Use `gh skill` below for Copilot.
+
+### gh skill
+
+Per-skill installs, and the only route for agents other than Claude Code. Install all skills at user scope for Claude Code:
 
 ```bash
 gh skill install rerelurelu/skillbox deslop --agent claude-code --scope user
