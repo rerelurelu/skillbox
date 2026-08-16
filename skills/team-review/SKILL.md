@@ -19,7 +19,7 @@ Three reviewers examine one scope independently and debate each other's findings
 | Role | Where it runs | Responsibility | Writes |
 |------|---------------|----------------|--------|
 | **main agent** | the user's session | Briefing, launching the coordinator, receiving the report, filtering against conversation context, applying fixes, reporting | reviewed files |
-| **coordinator** | a herdr pane, or a fresh subagent when herdr is unavailable | Assembles the team, facilitates the debate, triages, writes the report | **review directory only** |
+| **coordinator** | a herdr pane | Assembles the team, facilitates the debate, triages, writes the report | **review directory only** |
 | `codex-reviewer` | subagent under the coordinator | Runs Codex CLI and carries debate messages to and from it | nothing |
 | `cc-reviewer` | subagent under the coordinator | Runs the built-in `code-review` skill at level `high` | nothing |
 | `self-reviewer` | subagent under the coordinator | Runs the `self-review` skill; absent when that skill is not installed | nothing |
@@ -35,9 +35,7 @@ review_dir="$(git rev-parse --path-format=absolute --git-path team-review)"
 mkdir -p "$review_dir"
 ```
 
-Do not build the path as `$(git rev-parse --show-toplevel)/.git/team-review`. In a linked worktree (`git worktree add`) or a submodule, `<toplevel>/.git` is a **file** containing `gitdir: …`, not a directory, and `mkdir -p` fails with `Not a directory`. `--git-path` resolves the real per-worktree git directory.
-
-Because it lives under the git directory, nothing here is ever committed and no ignore rule is needed.
+Use `--git-path`. Do not build the path from `--show-toplevel`: in a linked worktree or submodule, `<toplevel>/.git` is a file, not a directory.
 
 ## Worktree safety
 
@@ -56,15 +54,13 @@ gh pr checkout         rm / mv / overwriting cp
 
 The one exception is Phase 7 step 4, where the main agent applies fixes the user authorized. The Roles table and Phase 7 already bound that; nothing else here overrides it.
 
-**This section binds only the participants that read it — the main agent and the coordinator.** Reviewer subagents never see this file. For them the prohibition exists only if the coordinator writes it into their prompt, which Phase 3 step 5 requires verbatim. Changing the rule here without changing that prompt leaves the reviewers unconstrained.
+Reviewer subagents never read this file. Their copy of this rule is the prompt in Phase 3 step 5; change both together.
 
-Treat modified, staged, and untracked files as the user's work. Read them, review them, and leave them exactly where they are.
+Read modified, staged, and untracked files, review them, and leave them where they are. Do not move them to `/tmp` or any holding directory either.
 
-Do not relocate them either. Moving untracked files, generated output, or scratch files to `/tmp` or a holding directory to "protect" them is the same loss as stashing them — the user comes back to a checkout that no longer has their work in it.
+Write everything this review produces to `$review_dir`. Do not build a clean tree — no phase needs one. If a branch change is genuinely needed, stop and ask for that exact operation.
 
-Everything this review produces goes in `$review_dir`. No phase of this skill needs a clean tree, so do not build one: Phase 7's verification runs against the working tree as it stands, which is the state under review. If a branch change is genuinely needed, stop and ask for that exact operation.
-
-To read a pull request, use `gh pr view` and `gh pr diff`. They need no local ref and leave the checkout alone.
+Read pull requests with `gh pr view` and `gh pr diff`.
 
 ## Invocation modes
 
@@ -74,9 +70,7 @@ This skill runs as two different participants, told apart by the arguments.
 
 **Coordinator mode** (`--coordinator --briefing <path> --report <path>`): **skip Phases 0 and 0.5** and start at Phase 1. Read the briefing from the given path and write the report to the given path.
 
-Without this flag a coordinator launched by Phase 0.5 would run Phase 0.5 itself, split another pane below its own, launch another coordinator, and recurse until the tab is unusable.
-
-Coordinator mode also fixes where `references/` lives. When the skill is invoked through the Skill tool, the harness states its base directory (`Base directory for this skill: …`); resolve every `references/…` path against that directory. Do not resolve them against the current working directory — a coordinator's cwd is the repository under review, so `references/code.md` would resolve to `<repo root>/references/code.md` and fail, leaving it with no severity table and no domain criteria.
+Resolve every `references/…` path against the skill's base directory, which the harness states on invocation (`Base directory for this skill: …`). Never against the current working directory — a coordinator's cwd is the repository under review.
 
 ## Phase 0: Briefing (main agent)
 
@@ -86,7 +80,7 @@ The reviewers have no conversation context. Give them enough to avoid wasted eff
 
 - What the change does, in a few sentences
 - Scope boundaries: which paths are under review and which are not
-- Anything deliberately unimplemented, stubbed, or left as a TODO, and why. Without this, every reviewer independently reports the same missing error handling.
+- Anything deliberately unimplemented, stubbed, or left as a TODO, and why
 - Dependency and version summary (see Phase 3)
 - Location of convention or decision docs (`docs/adr/`, `CONTRIBUTING.md`, `CLAUDE.md`)
 
@@ -96,21 +90,27 @@ The reviewers have no conversation context. Give them enough to avoid wasted eff
 - "This approach was already agreed with the user"
 - "This is the project's established pattern"
 
-A reviewer told that something is settled stops examining it, and settled things are where bugs hide. Reviewers are useful here precisely because they cannot be talked into the intended design. Brief them on constraints, not on verdicts.
+Brief them on constraints, not on verdicts. A reviewer told that something is settled stops examining it.
 
-Write the briefing to `$review_dir/briefing-<UTC timestamp>.md`. Timestamp it: two reviews started in the same repo would otherwise overwrite each other's briefing, and the second coordinator would review the first one's scope.
+Write the briefing to `$review_dir/briefing-<UTC timestamp>.md`.
 
 ## Phase 0.5: Launch the Coordinator (main agent)
 
 The team takes minutes to respond. Never run Phases 1-6 inline.
 
-**Decide the report path here, not in Phase 6.** The main agent waits on this file, so the coordinator cannot be the one to invent its name.
+### herdr is required
+
+```bash
+test "${HERDR_ENV:-}" = 1
+```
+
+If this fails, report that team-review needs a herdr pane and stop. Do not substitute a subagent coordinator. Check this before creating the briefing file or any pane.
+
+Decide the report path here, not in Phase 6 — the main agent waits on this exact name.
 
 ```bash
 report_path="$review_dir/report-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
 ```
-
-### Under herdr (`test "${HERDR_ENV:-}" = 1`)
 
 ```bash
 herdr pane split --pane "$HERDR_PANE_ID" --direction down --no-focus --cwd <repo root>
@@ -149,7 +149,7 @@ Invoking the skill rather than telling the coordinator to read a file is what ma
 
 **Fallback when the skill is not installed in the coordinator's environment** (a different machine, or a scope that does not carry it): fall back to prose, and then the paths must be spelled out — the absolute path of this SKILL.md, the statement that `references/` sits beside it, the briefing path, and the report path.
 
-Either way, append: "Do not end your turn until that report file exists."
+Do not tell the coordinator to keep its turn alive. The watchdog below handles an idle pane.
 
 Keep the instruction short. The briefing goes in a file, never in this argument: it travels through a shell, and quotes, backticks, or `$` in it are mangled or executed on the way.
 
@@ -161,29 +161,39 @@ herdr pane read <pane_id> --source visible --lines 30
 
 Resend only if the instruction text is absent from the pane.
 
-### Without herdr
-
-Launch the coordinator as a background subagent — a **fresh** one (`general-purpose`), not `subagent_type: "fork"`. A fork inherits this conversation's full transcript, which hands the coordinator exactly what Phase 0 exists to withhold: it would read the main agent's earlier "we already decided this" statements and triage accordingly, and Phase 7's impartiality safeguard would be bypassed. Give it the same coordinator-mode arguments (briefing path and report path). Everything from Phase 1 onward is identical; only Phase 7's pane cleanup is skipped.
-
 ### Waiting
 
 Wait in the background (Bash `run_in_background`) and return control to the user with one line: the review is running in the pane below, and the conversation stays usable.
 
-**Wait on the report file, and pace the loop.** Two traps compound here: `agent_status` reaches `done` transiently while the coordinator is between subagents, and `herdr agent wait` returns *immediately* (measured at 0.006s) when the agent is already in a matching state. Without a sleep on the non-matching path, all iterations burn in under a second and the loop falls through while the review is still running.
+The coordinator goes idle whenever it has nothing to do until a reviewer answers. This loop detects that and prompts the pane to continue.
+
+Run it in the background (Bash `run_in_background`). It is plain shell — no model in the loop — so the conversation stays fully usable while it runs.
 
 ```bash
 deadline=$((SECONDS + 2700))
 while (( SECONDS < deadline )); do
-  herdr agent wait <pane_id> --until idle --until done --until blocked --timeout 60000 >/dev/null 2>&1
-  [ -s "$report_path" ] && { echo "done"; exit 0; }
-  [ "$(herdr agent get <pane_id> | ...agent_status...)" = blocked ] && { echo "blocked"; exit 2; }
+  herdr agent wait <pane_id> --until idle --until blocked --timeout 60000 >/dev/null 2>&1
+  [ -s "$report_path" ] && { echo done; exit 0; }
+  st=$(herdr agent get <pane_id> | ...agent_status...)
+  [ "$st" = blocked ] && { echo blocked; exit 2; }
+  if [ "$st" = idle ]; then
+    [ -s "$report_path" ] && { echo done; exit 0; }
+    herdr agent prompt <pane_id> 'Status check: use ListAgents to see which reviewers have returned and which are still running. Print one line in the form  PHASE n | done: <names> | waiting: <names>  then collect whatever has come back and carry on from there.' --wait --until working --timeout 10000
+  fi
   sleep 5
 done
 echo "timed out waiting for report: $report_path" >&2
 exit 1
 ```
 
-Test with `-s`, not `-f`: a zero-byte file is not a finished report. Exit non-zero on timeout so the main agent can tell a stall from a success.
+Keep every part of that loop as written:
+
+- Wait on `idle` and `blocked` only. `agent_status` reaches `done` transiently between subagents.
+- Test the report with `-s`, not `-f`. A zero-byte file is not a finished report.
+- Keep the `sleep 5`. `herdr agent wait` returns immediately when the agent already matches.
+- Never resume a `blocked` pane. Exit and let Phase 7 hand it to the user.
+- Re-test the report immediately before sending, and send with `--wait --until working`.
+- Exit non-zero on timeout.
 
 **If you were invoked with `--coordinator`**: skip this phase and execute Phases 1-6.
 
@@ -244,7 +254,7 @@ Checking only the user scope reports "not installed" for a project-scoped or plu
   the full findings in your final message as text instead.
   ```
 
-  Without it the reviewer reaches the end of `code-review` with no way to report and either stalls without returning or improvises a format, which is why this reviewer's results have been inconsistent. Confirmed by inspection: a subagent has the `code-review` skill available but not `ReportFindings`.
+  A subagent has the `code-review` skill but not `ReportFindings`; without this line the reviewer has no way to report and may not return at all.
 - `name: "self-reviewer"` — invokes the `self-review` skill, returns findings. **Skip entirely when it is not installed.** Two reviewers is a valid team; do not substitute anything in its place.
 
 Every reviewer's prompt — the Codex request, the `code-review` invocation, and the `self-review` invocation alike — must carry these three lines verbatim. A reviewer never reads this SKILL.md, so a rule that stays here does not reach it.
@@ -260,13 +270,9 @@ The middle line is the one that does the work. "Do not modify files" reads as be
 
 ### Waiting for reviewers
 
-Two rules that pull in opposite directions, and both matter.
+**Never sleep, poll, or run a wait loop for a reviewer, and never call `ScheduleWakeup`.**
 
-**Never sleep, poll, or run a wait loop for a reviewer.** A reviewer finishing, and a reply to `SendMessage`, both arrive as notifications that re-invoke you. A `sleep 240` or an `until (( SECONDS >= end ))` loop does not make the reply come sooner — it just burns the wall clock, and in measured runs it tripled the review's duration. When you have nothing to do until a reviewer answers, end the tool call and let the notification wake you.
-
-**Do not end your turn until the report file exists.** Ending the turn with the report unwritten leaves the pane `idle` with nothing to resume it; the review stalls silently and the main agent waits for a report that will never be written.
-
-These are consistent: ending a *tool call* to await a notification is not ending your *turn*. Return from the tool, stay in the turn, and continue when the notification arrives. Only Phase 6's completed report ends the turn.
+When you have nothing to do until a reviewer answers, say so and end your turn. The main agent watches this pane and prompts you to continue.
 
 ### Codex command
 
@@ -274,12 +280,12 @@ These are consistent: ending a *tool call* to await a notification is not ending
 codex exec --sandbox read-only --cd <project_directory> -o "$review_dir/codex-<purpose>.md" "<request>" < /dev/null
 ```
 
-Verified against codex-cli 0.147.0. Four details matter:
+Keep every flag as written (verified against codex-cli 0.147.0):
 
-- **There is no `--full-auto` flag on `codex exec`.** Passing it fails immediately with `tip: to pass '--full-auto' as a value, use '-- --full-auto'` and the reviewer returns nothing. `--sandbox read-only` alone already prevents writes.
-- `< /dev/null` closes stdin. Without it Codex waits for instructions on an open stdin.
-- `-o <file>` writes only the agent's final message to that file. Read the findings from there instead of parsing the run log, which also carries token counts and hook output.
-- Point `-o` inside the review directory. Written to the repo root it becomes an untracked file inside the tree under review.
+- No `--full-auto`. That flag does not exist on `codex exec` and the call fails outright. `--sandbox read-only` already prevents writes.
+- `< /dev/null` closes stdin, which Codex otherwise waits on.
+- `-o <file>` captures the final message. Read findings from that file, not the run log.
+- Keep `-o` inside the review directory, never the repo root.
 
 Every request sent to Codex MUST include both sentences verbatim:
 
@@ -393,7 +399,7 @@ Everything from here runs in the main session.
 
 Read the report file with the `Read` tool. Do not reconstruct it from pane output: Claude Code collapses subagent output in the pane, so the findings are not recoverable from the terminal.
 
-Under herdr, confirm the pane's final state first with `herdr agent get <pane_id>`:
+Confirm the pane's final state first with `herdr agent get <pane_id>`:
 
 - **`blocked`** — the coordinator is waiting on an approval prompt. Read it with `herdr pane read <pane_id> --source visible --lines 40`, **do not answer on its behalf**, and ask the user. Do not close the pane.
 - **`idle` / `done`** — proceed.
