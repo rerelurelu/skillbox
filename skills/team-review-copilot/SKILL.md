@@ -1,357 +1,346 @@
 ---
 name: team-review-copilot
 description: |
-  Runs a review team inside GitHub Copilot CLI over one scope: two Codex CLI reviewers with different lenses and one Copilot subagent reviewer. The host session makes the reviewers argue their findings against each other, triages what survives, applies fixes when the user authorized edits, and reports what changed. Requires the codex CLI on PATH; on Claude Code use team-review instead.
-  Triggers on: "review", "code review", "review this", "/team-review-copilot"
+  GitHub Copilot CLI の中でレビューチームを組み、1 つのレビュー範囲を複数のモデルに独立して調べさせる。host セッションが Codex CLI を自分で実行し、その指摘を copilot-reviewer サブエージェントにぶつけて、維持・降格・取り下げのどれかを根拠付きで答えさせる。生き残った指摘を host がトリアージし、編集が承認されていれば修正して報告する。codex CLI が PATH にあることが必要。Claude Code では team-review を使う。
+  Triggers on: "review", "code review", "review this", "レビュー", "/team-review-copilot"
   Use when: reviewing code, implementation plans, or architectural designs from Copilot CLI.
-version: "1.0.0"
+version: "2.0.0"
 user-invocable: true
-allowed-tools: "shell"
 argument-hint: "[scope]"
 license: "GPL-3.0"
 ---
 
 # Team Review (Copilot CLI)
 
-Three reviewers examine one scope independently and argue their findings against each other. The host session — the only participant that holds the conversation context — runs that argument, decides what to act on, and makes every edit.
+2 つのモデルが同じレビュー範囲を独立に調べ、互いの指摘に反論する。host は片方（Codex）を自分の手で動かし、もう片方に主張を運ぶ。
 
-## Roles
+## 役割
 
-| Role | Where it runs | Responsibility | Writes |
-|------|---------------|----------------|--------|
-| **host** | the user's Copilot CLI session | Scope, briefing, dispatching reviewers, running the debate, triage, applying fixes, reporting | reviewed files |
-| `codex-correctness` | subagent → `codex exec` | Bugs, boundary values, error paths, untrusted input | nothing |
-| `codex-design` | subagent → `codex exec` | Design flaws, impact of the change, maintainability, version fit | nothing |
-| `copilot-reviewer` | subagent | Reviews the scope directly against `references/` criteria | nothing |
+| 役割 | 実体 | やること |
+|------|------|----------|
+| **host** | ユーザーの Copilot CLI セッション | 範囲の決定 · ブリーフィング · Codex の実行 · 主張の受け渡し · トリアージ · 編集 · 報告 |
+| `copilot-reviewer` | サブエージェント | 範囲を自分で読む · 指摘を出す · 反論に答える |
 
-Two reviewers run on Codex and one on Copilot's own model. That split is the point: a finding that only one model family can see is still found, and a finding both families reach independently is worth more than either alone.
+`codex exec` は 1 回ごとにコンテキストが空の新しいプロセスである。したがって Codex は独立したレビュアーであり、host が自分に 2 回聞いているのとは違う。サブエージェント側も同じ理由で独自のコンテキストウィンドウを持つ。
 
-Each `codex exec` call is a fresh process with an empty context, so two calls with different lenses are two independent reviewers, not one reviewer asked twice.
+このスキルは `.agent.md` のカスタムエージェント定義を同梱しないし、必要ともしない。`gh skill install` が配布するのは `skills/<name>/` 配下だけなので、このディレクトリ以外に何も入っていない状態で動く必要がある。レビュアーの役割は委譲プロンプトに書く。
 
-**No participant except the host modifies a reviewed file.**
+レビュー対象のファイルを変更するのは host だけ。
 
-## Preconditions
+## 前提条件
 
 ```bash
 command -v codex
 ```
 
-If `codex` is absent, say so and ask the user whether to continue with `copilot-reviewer` alone. A single-family review loses the cross-check this skill is built around, so it is the user's call, not a silent fallback.
+`codex` が無い場合はその旨を伝え、`copilot-reviewer` だけで続けるかをユーザーに聞く。同じモデル系統だけでレビューするのは、このスキルが前提にしている相互チェックではないので、続行はユーザーの判断とする。
 
-The deepwiki MCP is optional. When it is configured, Phase 3 uses it; when it is not, Phase 3 records the skip.
+deepwiki MCP は任意である。設定されていれば `copilot-reviewer` がバージョン確認に使い、Phase 5 がバージョンに関する対立の決着に使う。設定されていなければレポートにその旨を書く。
 
-## The review directory
+## このスキルは何も残さない
 
-Everything this skill produces goes in one directory, resolved like this:
+リポジトリには何も書き込まない。レビュー用のディレクトリも作らない。レビュアーは委譲プロンプトからブリーフィングを読み、指摘は最終メッセージで返す。
 
-```bash
-review_dir="$(git rev-parse --path-format=absolute --git-path team-review)"
-mkdir -p "$review_dir"
+唯一の例外が Codex の回答で、これは `codex exec` がテキストを返す手段がファイルだからである。Phase 4 で一時ディレクトリに書き、同じシェル呼び出しの終了時に削除する。
+
+## 絶対パスだけを渡す
+
+**サブエージェントのプロンプトに書くパスは、すべて絶対パスに展開する。** シェル変数を書かない。`references/plan.md` のような相対パスを書かない。サブエージェントに埋めさせる `<プレースホルダ>` を残さない。サブエージェントは自分のシェルを持つ別プロセスで、host の変数は存在せず、相対パスの `references/…` はレビュー対象のリポジトリを基準に解決されて存在しないパスになる。その結果、レビュアーは Severity 基準を持たないままレビューし、そのことを報告もしない。
+
+`references/…` はこのスキル自身のディレクトリ（`~/.copilot/skills/team-review-copilot/`、またはインストール先のプロジェクトスキルディレクトリ）を基準に解決する。作業ディレクトリを基準にしてはならない。
+
+## ワークツリーの保護
+
+既定のレビュー範囲は未コミットの作業である。ツリーを「きれいにする」操作は、レビュー対象そのものを破壊する。
+
+**どのフェーズでも、HEAD・index・レビュー対象ワークツリーのパスを変更するコマンドを実行してはならない。** Git コマンドだけでなく、シェルのファイル操作、フォーマッタ、コード生成、ビルドも含む。以下は例であって全部ではない。
+
+```
+git stash（すべての形式）   git clean（-n / --dry-run を除く）
+git reset（すべての形式）   git switch
+git checkout               git restore
+gh pr checkout             rm / mv / 上書きする cp
 ```
 
-Use `--git-path`. Do not build the path from `--show-toplevel`: in a linked worktree or submodule, `<toplevel>/.git` is a file, not a directory.
+例外は Phase 6 step 2 だけで、そこで host がユーザーの承認した修正を適用する。
 
-## Worktree safety
+サブエージェントはこのファイルを読まない。同じ内容を Phase 4 のプロンプトに書いてある。片方だけ書き換えてはならない。
 
-The default review scope is uncommitted work. Anything that "cleans up" the tree destroys the thing under review.
+変更済み・ステージ済み・未追跡のファイルを読み、レビューし、そのままの場所に置いておく。`/tmp` などの退避先にコピーしない。ブランチの切り替えが本当に必要なら、その操作を名指しでユーザーに確認する。
 
-**No participant may run any command that changes HEAD, the index, or any path in the reviewed working tree**, in any phase. This covers Git commands, shell file operations, formatters, generators, and build steps — not only the examples below.
+pull request は `gh pr view` と `gh pr diff` で読む。
 
-Examples, not an exhaustive list:
+## Phase 1: レビュー範囲の決定
 
-```
-git stash (any form)   git clean (except -n / --dry-run)
-git reset (any form)   git switch
-git checkout           git restore
-gh pr checkout         rm / mv / overwriting cp
-```
-
-The one exception is Phase 8 step 2, where the host applies fixes the user authorized.
-
-Subagents never read this file. Their copy of this rule is the prompt in Phase 4; change both together.
-
-Read modified, staged, and untracked files, review them, and leave them where they are. Do not move them to `/tmp` or any holding directory either.
-
-Write everything this review produces to `$review_dir`. Do not build a clean tree — no phase needs one. If a branch change is genuinely needed, stop and ask for that exact operation.
-
-Read pull requests with `gh pr view` and `gh pr diff`.
-
-## Phase 1: Determine Scope
-
-Use the scope the user gave. If none was given, default to everything uncommitted — **including untracked files**:
+ユーザーが範囲を指定したならそれに従う。指定が無ければ未コミットの変更すべてを対象にする。**未追跡ファイルも含める。**
 
 ```bash
 { git diff HEAD --name-only; git ls-files --others --exclude-standard; } | sort -u
 ```
 
-`git diff HEAD` alone omits untracked files, so a newly added file is silently excluded from its own review. If both commands produce no paths, report that the scope is empty and stop.
+`git diff HEAD` だけでは未追跡ファイルが漏れる。新規追加したファイルが、そのファイル自身のレビューから外れる。両方のコマンドが 1 件も返さなければ、範囲が空であることを報告して停止する。
 
-## Phase 2: Determine Review Type
+## Phase 2: レビュー種別の決定
 
-Classify the scope:
+- **Plan** — 実装計画、タスクリスト、他のエージェントが実行する手順書
+- **Design** — アーキテクチャ文書、設計判断
+- **Code** — ソースコード（既定）
 
-- **Plan** — implementation plans, task lists, TODO documents
-- **Design** — architecture docs, design decisions
-- **Code** — source code files (default)
+`references/<type>.md` を読み、観点と Severity 基準を得る。Phase 4 と Phase 5 の両方で使う。
 
-Read `references/<type>.md` (plan.md / design.md / code.md) for this type's criteria and severity table. Phases 4 and 6 both use it.
+**ドメイン**をパスと拡張子から判定する。
 
-**Domain criteria.** Detect the domains the scope touches, from file paths and extensions:
+- **fe** — `.tsx`/`.jsx`/`.vue`/`.svelte`、`components/`、`styles/`、`.css`/`.scss`
+- **be** — `server/`、`api/`、`controllers/`、`models/`、`.sql`、ORM・マイグレーション
+- **infra** — `Dockerfile`、`docker-compose*`、`*.tf`、k8s マニフェスト、`.github/workflows/`
 
-- **fe** — `.tsx`/`.jsx`/`.vue`/`.svelte`, `components/`, `styles/`, `.css`/`.scss`
-- **be** — `server/`, `api/`, `controllers/`, `models/`, `.sql`, ORM/migration files
-- **infra** — `Dockerfile`, `docker-compose*`, `*.tf`, k8s manifests, `.github/workflows/`
+該当するドメインごとに `references/domains/<domain>.md` を読む。種別の観点に追加する形で使う。
 
-Read `references/domains/<domain>.md` for each detected domain. These criteria are additive to the type criteria. Multiple domains may apply to one scope.
+## Phase 3: ブリーフィング
 
-## Phase 3: Briefing
+レビュアーは会話の文脈を持っていない。1 ページに収まる短いブリーフィングを書き、レビュアーの委譲プロンプトと Codex へのリクエストの両方に入れる。ブリーフィング用のファイルは作らない。どちらのレビュアーもリポジトリを自分で読めるので、ブリーフィングには**リポジトリを読んでも分からないことだけ**を書く。
 
-The reviewers have no conversation context. Give them enough to avoid wasted effort, and nothing that would tell them what to conclude.
+**書くもの:**
 
-**Include — facts:**
+| 項目 | リポジトリから得られない理由 |
+|------|------------------------------|
+| 何を変更したか（機械的に） | ワークツリーの変更のうちどれが今回のレビュー対象かは、どこにも書かれていない |
+| レビュー範囲の内と外 | 同上 |
+| 意図的に未完成な箇所（**事実だけ。理由は書かない**） | 書きかけのコードと書き忘れたコードは見分けがつかない |
+| レビュー種別と、判定基準ファイルの絶対パス | Severity 基準の出どころが必要 |
+| 規約文書の場所（`docs/adr/`、`CONTRIBUTING.md`、`AGENTS.md`） | 探し回らせないため |
 
-- What the change does, in a few sentences
-- Scope boundaries: which paths are under review and which are not
-- Anything deliberately unimplemented, stubbed, or left as a TODO, and why
-- Review type and detected domains, with the criteria that apply
-- Dependency and version summary
-- Location of convention or decision docs (`docs/adr/`, `CONTRIBUTING.md`, `AGENTS.md`)
+**書かないもの（結論）:** 「この設計判断は妥当」「これはユーザーと合意済み」「これがこのプロジェクトの流儀」、および意図的な省略の理由。決着済みだと伝えられたレビュアーはそこを調べるのをやめる。意図的な省略が実際に問題を起こしているなら、それこそ必要な指摘である。
 
-**Exclude — conclusions:**
+変更内容は機械的に書く。どのフェーズ・ファイル・関数が動いたかであって、なぜ良いかではない。書いたのは自分なので、正当化を渡されたレビュアーはそれを受け入れがちになる。
 
-- "This design decision is sound"
-- "This approach was already agreed with the user"
-- "This is the project's established pattern"
+**依存バージョンの要約と deepwiki の事前確認をここでしてはならない。** レビュアーはロックファイルを自分で読む。どのライブラリが重要かは、変更ファイルを読んだレビュアーの方が正確に判断できる。この作業は Phase 4 でレビュアーのプロンプトに入れる。
 
-Brief them on constraints, not on verdicts. A reviewer told that something is settled stops examining it.
+## Phase 4: 両方のレビュアーを走らせる
 
-**Dependency versions** (Code and Design scopes). Summarize version info from manifests or lockfiles present in the repo (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `build.gradle.kts`, `pom.xml`, `gradle/libs.versions.toml`). This is what lets a reviewer judge whether an API is deprecated for the versions actually in use.
+### 1. Copilot 側のレビュアーを委譲する
 
-**Version fact-check with deepwiki** (Code and Design scopes, when the deepwiki MCP is available). Read `references/deepwiki.md` and follow it: identify the exact versions of the language, runtime, framework, and the libraries the changed files import; resolve each to its GitHub repo; ask what that **specific version** recommends and what it deprecated. Cap this at 5 targets. Add the answers to the briefing as quoted facts with their source.
-
-Reviewers cannot report a problem in a version released after their training data, and they do not know that they cannot. This step is what covers that gap. Skip it when the MCP is unavailable, and record the skip for the Phase 7 report.
-
-Write the briefing to `$review_dir/briefing-<UTC timestamp>.md`. Every reviewer reads it from that path — do not paste it into a prompt, where quotes, backticks, and `$` are mangled or executed on the way through the shell.
-
-## Phase 4: Dispatch the Reviewers
-
-Dispatch all three as subagents in one go so they run in parallel. `/fleet` dispatches them as background subagents; without it, delegate to three custom agents in the same turn.
-
-Each subagent prompt carries the briefing path, the `references/` files that apply, its own lens, and these lines verbatim. A subagent never reads this SKILL.md, so a rule that stays here does not reach it.
+Codex を動かす前に委譲し、Codex の実行中に読ませる。プロンプトには、ブリーフィング本文、判定基準ファイルの絶対パス、`references/deepwiki.md` の絶対パス、レビュー範囲、下の指摘の書式、そして以下の文言をそのまま含める。
 
 ```
-Report findings only. Do not modify, create, or delete any file.
-Do not change the checkout: no git stash, clean, reset, switch, checkout,
-restore, and no gh pr checkout. Inspect a PR with gh pr view / gh pr diff.
-Write your findings to <review_dir>/findings-<your name>.md and return a
-summary plus that path.
+レビュー範囲は自分で読む。指摘を報告する前に、その指摘を自分で確かめる。
+どの入力・状態で何が起きるかを書く。
+
+非推奨・削除済み・非慣用だと主張する前に、ロックファイルを読んで実際に
+入っているバージョンを使う。記憶を根拠にしない。deepwiki MCP が使える
+なら <references/deepwiki.md の絶対パス> の手順に従う（パッケージから
+GitHub リポジトリを解決する方法と、推測で組み立てない決まりが書いてある）。
+変更ファイルが import しているライブラリについて、そのバージョンでの推奨と
+非推奨を尋ね、回答を根拠として引用する。対象は最大 5 件。
+
+指摘を報告するだけで、ファイルの変更・作成・削除はしない。チェックアウト
+状態も変えない。git stash / clean / reset / switch / checkout / restore と
+gh pr checkout は使わない。PR は gh pr view / gh pr diff で見る。
+
+すべての指摘を、下の書式の 5 項目すべてを省略せずに最終メッセージへ書く。
+要約しない。このメッセージだけが自分の作業のうち残るものである。
 ```
 
-The checkout line is the one that does the work. "Do not modify files" reads as being about file contents, so it does not stop `gh pr checkout <n>` or `git checkout <branch>`. Those commands replace tracked files and discard the user's uncommitted work, which is usually the very thing under review.
+チェックアウトに関する行が実際に効く部分である。「ファイルを変更するな」は中身の書き換えの話に読めるため、`gh pr checkout <n>` や `git checkout <branch>` を止められない。これらのコマンドは追跡ファイルを置き換え、ユーザーの未コミット作業、つまりレビュー対象そのものを消す。
 
-Findings go to a file because a subagent's context is discarded when it finishes. What is not written down cannot be quoted in Phase 5.
+### 2. Codex を実行する
 
-### Lenses
-
-| Reviewer | Lens |
-|----------|------|
-| `codex-correctness` | Boundary values and error paths, concurrency, state and lifecycle, untrusted input reaching queries/shell/HTML/file paths |
-| `codex-design` | Design flaws, impact of the change on callers, maintainability, deprecated or non-idiomatic APIs for the versions in the briefing |
-| `copilot-reviewer` | The full `references/<type>.md` criteria, plus the domain criteria |
-
-The lenses overlap on purpose at the edges. Two reviewers reaching the same finding from different directions is the signal Phase 5 relies on.
-
-### Codex command
-
-Both Codex reviewers run:
+1 ラウンドは 2 段階で行う。まず一時ディレクトリを作り、リクエストをその中にファイルとして書く。
 
 ```bash
-codex exec --sandbox read-only --cd <project_directory> -o "$review_dir/codex-<lens>.md" "<request>" < /dev/null
+mktemp -d "${TMPDIR:-/tmp}/team-review.XXXXXX"
 ```
 
-Keep every flag as written (verified against codex-cli 0.147.0):
+**リクエストをシェルの引数やヒアドキュメントで組み立ててはならない。** ブリーフィングにも、後のラウンドで逐語引用する指摘にも、任意の文字列が入りうる。バッククォート、`$`、そしてヒアドキュメントの区切り文字と同じ内容の行。区切り文字と一致する行があるとヒアドキュメントはそこで終わり、残りの行がシェルコマンドとして実行される。終了コードは 0 のままなので、失敗したことが誰にも分からない。リクエストをファイルに書いて標準入力から渡せば、これらの場合がすべて消える。
 
-- No `--full-auto`. That flag does not exist on `codex exec` and the call fails outright. `--sandbox read-only` already prevents writes.
-- `< /dev/null` closes stdin, which Codex otherwise waits on.
-- `-o <file>` captures the final message. Read findings from that file, not the run log.
-- Keep `-o` inside the review directory, never the repo root.
+次に、以下を 1 回のシェル呼び出しで実行する。10 分以上の実行を許可する。
 
-Every request sent to Codex MUST include both sentences verbatim:
+```bash
+tmpdir='<mktemp が出力したディレクトリ>'
+cleanup() {
+  case "$(basename -- "${tmpdir:-/}")" in
+    team-review.??????) [ -n "$tmpdir" ] && [ -d "$tmpdir" ] && rm -rf -- "$tmpdir" ;;
+  esac
+}
+trap cleanup EXIT INT TERM
 
-1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
-2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
-
-### Finding format
-
-Every finding must point at a location and state a concrete failure:
-
-| Type | Location | Failure |
-|------|----------|---------|
-| Code | `file:line` | The input or state that makes it break, and what happens |
-| Design | Section heading or a quote from the document | What breaks, at what load or in which failure mode |
-| Plan | Step number or heading | Which step cannot proceed, and why |
-
-A finding with no concrete failure cannot be argued about in Phase 5 — dispatch its author again for one before proceeding.
-
-## Phase 5: Debate
-
-Group the findings:
-
-- **Agreed** — two or more reviewers raised the same issue. Skip the debate; carry to Phase 6.
-- **Contested** — one reviewer raised it and another disagrees.
-- **Single-source** — one reviewer raised it and no one has spoken against it.
-
-Debate the contested set, and put every single-source finding up for challenge with the reviewers that did not raise it. A finding no one examined is not worth more than a finding from a single reviewer working alone.
-
-### How a round works here
-
-Subagents do not survive their task and cannot message each other, so a round is a fresh dispatch, not a reply:
-
-- **Codex reviewer** — a new `codex exec` call whose request contains the finding quoted verbatim, the counterargument, and the path of that reviewer's own earlier findings file.
-- **Copilot reviewer** — a new subagent with the same three things in its prompt.
-
-Every debate request ends with "Be frank and direct. Don't hold back — push back candidly." Codex requests also carry the two mandatory sentences above.
-
-Batch the points for one reviewer into a single dispatch. One dispatch per finding spends a full process startup on each line.
-
-**Version findings are settled by evidence, not by argument.** When a finding claims an API is deprecated, non-idiomatic, or removed, do not let the reviewers argue it from memory. Query deepwiki per `references/deepwiki.md`, with the exact version, and apply the outcome: confirmed keeps the finding and cites the answer; contradicted drops it; unanswerable marks it **未検証** and lowers its severity by one step. This does not consume a debate round.
-
-**Round limit: 2 round trips per point.** If the reviewers have not converged after two rounds, stop and carry the finding forward marked unresolved, recording both positions. Do not open a third round.
-
-Record for each debated point: the topic, who held which position, and the outcome (withdrawn / upheld / unresolved). Withdrawn findings are dropped; upheld and unresolved findings continue.
-
-### Running the debate yourself
-
-You are both the facilitator and the author of the code under review. That is the weak point of this arrangement, and it has one rule: **carry every finding into the debate as its author wrote it.** Do not soften a finding, merge two findings into a milder one, or drop one before it has been challenged. Dropping happens in Phase 6 by severity, or in Phase 8 with a recorded reason — never silently here.
-
-## Phase 6: Triage
-
-Assign severity from the `references/<type>.md` table. Drop everything at LOW.
-
-Split what remains by whether the fix is uniquely determined.
-
-**To fix** — all of the following hold:
-
-- The correct behavior is unambiguous
-- Exactly one reasonable fix exists
-- The fix stays inside the reviewed scope and needs no new dependency, schema change, or public API change
-- The debate outcome was not unresolved
-
-**For the user's decision** — any of the following holds:
-
-- Multiple viable fixes exist and choosing between them is a design decision
-- The intended behavior is unclear and the reviewers disagreed about it
-- The fix reaches outside the reviewed scope
-- The debate ended unresolved
-
-When in doubt, put it up for decision.
-
-## Phase 7: Write the Report File
-
-Write the surviving findings to `$review_dir/report-<UTC timestamp>.md`, so the review has a record that outlives this session:
-
-```markdown
-## スコープ
-<files reviewed>
-
-## レビュアー
-codex-correctness / codex-design / copilot-reviewer — 走らなかったものは「不在」と理由を明記する
-
-## バージョン確認
-deepwiki で確認: <name> v<version>, ... ／ 未使用（MCP が利用できないため）
-
-## 修正を提案する指摘
-
-### 1. <title>  `<file:line / 見出し / ステップ番号>`
-- **指摘**: <what is wrong>
-- **再現条件**: <input or state> のとき <result>
-- **提案する修正**: <the one fix>
-- **Severity**: CRITICAL / HIGH / MEDIUM
-- **議論**: 一致（N人） / 対立→維持 / 単独→反論なし
-
-## 判断が必要な指摘
-
-### 1. <title>  `<file:line / 見出し / ステップ番号>`
-- **指摘**: <what is wrong>
-- **現在の挙動**: <input or state> のとき <result>
-- **選択肢**: A: <approach> — <trade-off> / B: <approach> — <trade-off>
-- **判断が必要な理由**: <why it cannot be decided mechanically>
-
-## 議論の記録
-- **論点**: <topic> / **主張**: <reviewer> は <position>、<reviewer> は <position> / **結論**: 取り下げ / 維持 / 未決着
+codex exec --sandbox read-only --cd <プロジェクトディレクトリの絶対パス> \
+  -o "$tmpdir/codex.md" - < "$tmpdir/request.md" > /dev/null
+status=$?
+if [ "$status" -ne 0 ] || [ ! -s "$tmpdir/codex.md" ]; then
+  echo "CODEX_FAILED status=$status"
+  exit 0
+fi
+cat "$tmpdir/codex.md"
 ```
 
-A reviewer that did not run stays in the レビュアー list with its reason. Omitting it turns "we never checked" into something indistinguishable from "we checked and found nothing".
+各部分をこのまま保つ（codex-cli 0.147.0 で確認済み）。
 
-## Phase 8: Filter, Fix, Report
+- **プロンプト位置の `-`** で、Codex はリクエストを標準入力から読む。`codex exec --help` の記述: "If not provided as an argument (or if `-` is used), instructions are read from stdin."
+- **`-o "$tmpdir/codex.md"` と `> /dev/null`。** Codex は標準出力に長い実行ログを流し、最終メッセージはその末尾に埋もれる。実際のレビュー範囲ではログが長く、コマンド出力が途中で切られて回答が失われる。`-o` が最終メッセージだけを取り、`> /dev/null` がログを捨て、`cat` が回答だけを返す。
+- **終了ステータスと非空の判定。** ログイン期限切れ、ネットワーク障害、タイムアウトのいずれでも `codex.md` は無いか空になる。この判定が無いと、Codex が何も見つけなかったかのようにレビューが進み、2 者のうち 1 者を失ったままレポートには 2 者と書かれる。`CODEX_FAILED` が出たら 1 回だけ再実行する。再度失敗したら `copilot-reviewer` だけで続け、レポートに `不在: <失敗の内容>` と書く。
+- **削除の判定。** このコマンドが作った `team-review.XXXXXX` の形に一致する名前のディレクトリだけを削除する。空・未定義・想定外のパスはどれにも一致せず、何も削除されない。`${TMPDIR:-/tmp}` により、削除対象はプラットフォーム標準の一時ディレクトリ（macOS ではユーザーごとの `/var/folders` 配下）に限られる。強制終了された場合はディレクトリが残るが、数 KB がシステムの一時ディレクトリに残るだけで、リポジトリには何も残らない。
+- **`--full-auto` を付けない。** このフラグは `codex exec` に存在せず、付けると呼び出し自体が失敗する。`--sandbox read-only` で書き込みは既に防いでいる。
+- **10 分以上の実行時間。** 実際のレビュー範囲では数分かかり、2 分の既定値では途中で打ち切られて回答が欠ける。
 
-### 1. Filter against conversation context
+回答はコマンドの出力から読み、必要な内容を自分のコンテキストに保持する。呼び出しが返った時点でファイルは消えている。
 
-Drop findings that the conversation already settles: behavior that was deliberately chosen, work that is intentionally deferred, files outside what the user asked for.
+### リクエストに必ず含めるもの
 
-**Record every exclusion with its reason.** You wrote the code under review, so you are the participant least able to judge your own work impartially — a silent exclusion removes the very check this skill exists to provide. Listing exclusions lets the user overrule you.
+初回の呼び出しにも、議論の各ラウンドにも、同じものを含める。議論ラウンドは初回の記憶を持たない新しいプロセスであり、指摘と反論だけを渡すのは、Severity の表を見たことがない相手に Severity を答えさせることになる。
 
-### 2. Apply fixes only when edits are authorized
+- ブリーフィング本文
+- レビュー範囲と、その内外の境界
+- 判定基準ファイルと `references/deepwiki.md` の絶対パス
+- 下の指摘の書式
+- レビュアーに渡したのと同じロックファイルのルール（Codex は MCP を持たないので、deepwiki の部分を除いたロックファイルの部分だけ）
+- 以下の 2 文をそのまま
+  1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
+  2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
 
-A request to review, inspect, or report does not authorize edits. "review this" asks for findings; "review and fix" asks for changes.
+同じ規則が `copilot-reviewer` の再委譲にも当たる。新しいサブエージェントには、ブリーフィング、レビュー範囲、判定基準のパス、そのレビュアー自身の以前の指摘、そして答えるべき指摘と反論を渡す。
 
-When edits are authorized, apply what survives from the fixing set, and verify each with the project's typechecker, linter, or tests where they exist.
+### 3. 指摘の書式
 
-When they are not, change nothing and report the proposed fixes under 修正を提案する指摘 instead, with the replacement text.
+どちらのレビュアーからのものも、以下をすべて持つ。最後の 2 つが欠けている指摘は Phase 5 の議論にかけられない。提出者を再度委譲して補わせてから先へ進む。
 
-### 3. Report
+| 項目 | 内容 |
+|------|------|
+| id | `C1`、`H2` など。この実行中は変えない |
+| severity | `references/<type>.md` の基準による |
+| location | `file:line`、見出し、またはステップ番号 |
+| claim | 何が問題かを 1 文で |
+| evidence | どの入力・状態で何が起きるか。それを示すコードの経路 |
 
-Report in Japanese:
+## Phase 5: 議論とトリアージ
+
+指摘を分類する。
+
+- **一致** — 両者が同じ問題を挙げた。反論にかけない。
+- **対立** — 片方が挙げ、もう片方が否定している。
+- **単独** — 片方が挙げ、誰も反論していない。挙げていない側に反論させる。
+
+### ここでの 1 ラウンドの回り方
+
+どちらのレビュアーも仕事を終えると消え、互いに通信もできない。したがって 1 ラウンドは返信ではなく新しい開始になる。
+
+- **Codex** — 指摘と反論を含む新しい `codex exec`。
+- **copilot-reviewer** — 同じ内容に加えて、そのレビュアー自身の以前の指摘を渡した新しいサブエージェント。
+
+**指摘は id・severity・location・claim・evidence の 5 項目を省略せずに引用する。言い換えない。** 「もう片方は null の扱いに問題があると言っている」まで縮めると、こちらの要約についての議論になる。そのうえで 3 択の判定と根拠を求める。
+
+```
+ファイルに戻って確認し、次のいずれか 1 つだけで答える:
+  maintain / downgrade to <severity> / withdraw
+そして根拠を書く。確認したファイルと行、そこで何を見つけたか。
+率直に、遠慮なく反論してよい。
+```
+
+同じレビュアー宛の論点は 1 回の委譲にまとめる。指摘 1 件ごとに委譲すると、1 行ごとにプロセス起動 1 回分を使うことになる。
+
+### 自分で議論を回すということ
+
+host は進行役であり、たいていはレビュー対象を書いた本人でもある。この構成の弱点はそこにあり、規則を 2 つ置く。
+
+**すべての指摘を、提出者が書いたままの形で議論に載せる。** 指摘を和らげない。2 件を 1 件のより弱い指摘にまとめない。反論にかける前に落とさない。
+
+**中身の当否を自分で決めてはならない。** 判定は、その指摘を出した側から受け取る。host が決めてよいのは以下だけ。
+
+| 状況 | 結論 |
+|------|------|
+| 両者が支持した | 維持 |
+| 提起者が撤回した | 除外 |
+| 提起者が降格した | その Severity で維持 |
+| 2 ラウンド経ても両論が並んだまま | 未決着。両方の立場を記録する |
+
+**バージョンに関する指摘は議論ではなく証拠で決める。** ある API が非推奨・非慣用・削除済みだという指摘には、`references/deepwiki.md` の手順で、そのバージョンを明示して deepwiki に問い合わせる。裏が取れたら指摘を維持して回答を引用する。否定されたら取り下げる。答えが得られなければ **未検証** として Severity を 1 段下げる。この確認は議論のラウンド数に数えない。
+
+**1 論点あたり 2 往復まで。** 3 ラウンド目を始めてはならない。
+
+### トリアージ
+
+`references/<type>.md` の表で Severity を付ける。LOW はすべて落とす。
+
+**修正する** — 以下をすべて満たす。正しい挙動が一意に定まる。妥当な修正が 1 つしかない。修正がレビュー範囲の内側に収まり、新しい依存・スキーマ変更・公開 API の変更を必要としない。議論の結果が未決着ではない。
+
+**判断が必要** — 以下のいずれかに当たる。妥当な修正が複数あり、選択が設計判断になる。意図した挙動が不明で、レビュアーの見解が割れた。修正がレビュー範囲の外に及ぶ。議論が未決着で終わった。
+
+迷ったら「判断が必要」に入れる。
+
+## Phase 6: 取捨・修正・報告
+
+### 1. 会話の文脈で取捨する
+
+会話で既に決着している指摘を落とす。意図的に選んだ挙動、意図的に後回しにした作業、ユーザーが依頼していない範囲のファイル。
+
+**落とした指摘は理由と一緒にすべて記録する。** レビュー対象を書いたのは自分であり、自分の仕事を公平に判断できない立場にいる。黙って落とすと、このスキルが存在する理由そのものが消える。
+
+### 2. 編集が承認されているときだけ修正する
+
+レビュー・確認・報告の依頼は、編集の承認ではない。「レビューして」は指摘を求めている。「レビューして直して」は変更を求めている。
+
+編集が承認されている場合、取捨後に残った修正候補を適用し、プロジェクトに型チェッカー・リンター・テストがあれば 1 件ずつ確認する。承認されていない場合は何も変更せず、下の「修正を提案する指摘」の節を使う。
+
+### 3. 報告
+
+日本語で報告する。「修正した指摘」は実際に編集した分だけに使う。
 
 ```
 ## レビュー結果
 
 ### スコープ
-<files reviewed>
+<レビューしたファイル>
 
 ### レビュアー
-codex-correctness / codex-design / copilot-reviewer（不在の場合は理由も）
+codex / copilot-reviewer（不在の場合は理由も）
 
 ### バージョン確認
-deepwiki で確認: <name> v<version>, ... ／ 未使用
+deepwiki で確認: <name> v<version>, ... ／ 未使用（<理由>）
 
 ---
 
 ## 修正した指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-**指摘**: <what was wrong>
-**修正前の挙動**: <concrete input or state> のとき <concrete result>
-**修正後の挙動**: 同じ入力で <concrete result>
-**変更内容**: <what was edited>
+**指摘**: <何が問題だったか>
+**修正前の挙動**: <具体的な入力・状態> のとき <具体的な結果>
+**修正後の挙動**: 同じ入力で <具体的な結果>
+**変更内容**: <何を編集したか>
+
+---
+
+## 修正を提案する指摘（編集は未承認）
+
+### 1. <title>  `<file:line / 見出し / ステップ番号>`
+**指摘**: <何が問題か>
+**現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
+**提案する修正**: <置き換える内容そのもの>
 
 ---
 
 ## 判断が必要な指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-**指摘**: <what is wrong>
-**現在の挙動**: <concrete input or state> のとき <concrete result>
+**指摘**: <何が問題か>
+**現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
 **選択肢**:
-- A: <approach> — <trade-off>
-- B: <approach> — <trade-off>
-**判断が必要な理由**: <why>
+- A: <案> — <トレードオフ>
+- B: <案> — <トレードオフ>
+**判断が必要な理由**: <理由>
 
 ---
 
 ## 除外した指摘（判断の記録）
-- <finding> — 除外理由: <reason>
+- <指摘> — 除外理由: <理由>
 
 ---
 
 ### 議論の記録
 **論点**: <topic>
-**主張**: <reviewer> は <position> / <reviewer> は <position>
-**結論**: 取り下げ / 維持 / 未決着（両論併記）
+**主張**: <誰> は <立場> / <誰> は <立場>
+**結論**: 取り下げ / 維持 / 降格 / 未決着（両論併記）
 ```
 
-Both behavior lines require concrete values — actual inputs, actual outputs, actual error messages. 「正しく動くようになった」 is not a report; 「空配列を渡すと `TypeError: cannot read length of undefined` で落ちていたのが、`0` を返すようになった」 is.
+挙動を書く 2 行には具体的な値を入れる。実際の入力、実際の出力、実際のエラーメッセージ。「正しく動くようになった」は報告ではない。「空配列を渡すと `TypeError: cannot read length of undefined` で落ちていたのが、`0` を返すようになった」が報告である。
 
-Omit 除外した指摘 when nothing was excluded, and 議論の記録 when nothing was contested or challenged.
-
-Print the path of the report file at the end, so the full record can be reopened later.
+該当が無い節は省く。

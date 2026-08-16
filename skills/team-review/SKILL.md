@@ -1,430 +1,454 @@
 ---
 name: team-review
 description: |
-  Runs a review team of Claude Code teammates over one scope: Codex CLI, the built-in code-review skill, and self-review when installed. A facilitator teammate makes the reviewers argue their findings against each other, and the main agent then filters the surviving findings against the conversation context, applies fixes when the user authorized edits, and reports what changed. Requires Claude Code with agent teams enabled; on GitHub Copilot CLI use team-review-copilot instead.
-  Triggers on: "review", "code review", "review this", "/team-review"
+  Claude Code の agent teams でレビューチームを組み、1 つのレビュー範囲を複数のモデルに独立して調べさせる。ringmaster teammate が Codex CLI を自分で実行し、その指摘を claude-reviewer teammate（self-review が入っていれば self-reviewer も）にぶつけて、維持・降格・取り下げのどれかを根拠付きで答えさせる。生き残った指摘は main agent が会話の文脈で取捨し、編集が承認されていれば修正して報告する。Claude Code の agent teams が有効な環境が必要。GitHub Copilot CLI では team-review-copilot を使う。
+  Triggers on: "review", "code review", "review this", "レビュー", "/team-review"
   Use when: reviewing code, implementation plans, or architectural designs.
-version: "3.0.0"
+version: "4.0.0"
 user-invocable: true
-argument-hint: "[scope] | --facilitator --briefing <path> --report <path>"
+argument-hint: "[scope] | --ringmaster"
 license: "GPL-3.0"
 ---
 
 # Team Review
 
-Three reviewers examine one scope independently and argue their findings against each other. A facilitator runs that argument but never touches the reviewed files. The main agent — the only participant that holds the conversation context — decides what to act on and makes every edit.
+2 つのモデルが同じレビュー範囲を独立に調べ、互いの指摘に反論する。ringmaster は片方（Codex）を自分の手で動かし、もう片方に主張を運ぶ。会話の文脈を持っているのは main agent だけで、何を採用するかを決め、ファイルを編集するのも main agent だけ。
 
-## Roles
+## 役割
 
-Every participant except the main agent is a teammate: a separate Claude Code session with its own context window, spawned by the main agent.
+ringmaster とレビュアーは teammate である。それぞれ独立した Claude Code のセッションで、独自のコンテキストウィンドウを持ち、main agent が spawn する。
 
-| Role | Model | Responsibility | Writes |
-|------|-------|----------------|--------|
-| **main agent** (team leader) | the user's setting | Scope, briefing, spawning the team, filtering against conversation context, applying fixes, reporting | reviewed files |
-| `facilitator` | `sonnet` | Groups the findings, runs the debate, triages, writes the report | **review directory only** |
-| `codex-reviewer` | `sonnet` | Runs Codex CLI and carries debate messages to and from it | nothing |
-| `cc-reviewer` | `opus` | Runs the built-in `code-review` skill at level `high` | nothing |
-| `self-reviewer` | `opus` | Runs the `self-review` skill; absent when that skill is not installed | nothing |
+| 役割 | モデル | やること |
+|------|--------|----------|
+| **main agent**（team leader） | ユーザーの設定のまま | 範囲の決定 · ブリーフィング · spawn · 取捨 · 編集 · 報告 |
+| `ringmaster` | `sonnet` | Codex の実行 · 主張の受け渡し · トリアージ · 結論の送信 |
+| `claude-reviewer` | `opus` | 範囲を自分で読む · 指摘を出す · 反論に答える |
+| `self-reviewer` | `opus` | 同上（`self-review` スキル経由）。未インストールなら不在 |
 
-The facilitator proposes; the main agent decides. **No participant except the main agent modifies a reviewed file.**
+**レビュアーは自分でコードを読む。** 指摘の根拠を自分のコンテキストに持っているので、反論されたときにファイルに戻って答えられる。読む作業を subagent に委譲してはならない。他人の要約を運んでいるだけのレビュアーは、自分の指摘を擁護も撤回もできない。
 
-`codex-reviewer` runs on `sonnet` because it does not judge the code: it runs a command, reads the output file, and relays counterarguments back into Codex. The findings come from Codex's own model. `cc-reviewer` and `self-reviewer` produce their findings themselves, so they run on `opus`.
+**Codex だけは例外で、ringmaster が運ぶ。** Codex は別プロセスで Claude のコンテキストを共有できないため、コマンドを実行して言葉を運ぶ担当が要る。それを ringmaster に持たせると、テキストをコピーするだけの teammate が 1 つ減る。加えて `codex exec` の実行にかかる数分は、ringmaster のターンが生きたままの数分になる。
 
-Use bare aliases (`opus`, `sonnet`), never a pinned name like `claude-sonnet-5`: aliases resolve to the newest model in that family, so these lines need no editing when models change.
+**ringmaster はレビューをしないし、裁定もしない。** レビュー範囲を読んでいない。Codex の主張を Claude 側のレビュアーへ、その回答を Codex へ、どちらも逐語で運ぶ。ringmaster 自身の判断は Phase 5 の集約表に限定する。
 
-## Preconditions
+レビュー対象のファイルを変更するのは main agent だけ。
 
-Agent teams is an experimental feature and is off by default. Check it before writing any file or spawning anything:
+モデルは `opus` / `sonnet` という別名で書く。`claude-sonnet-5` のような固定名は書かない。別名はその系列の最新モデルに解決されるため、モデルが更新されてもこのファイルを書き換えずに済む。
 
-```bash
-test "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = 1
-```
-
-If this fails, report that this skill needs agent teams enabled — `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }` in `~/.claude/settings.json`, then restart the session — and stop. Do not fall back to plain subagents: they cannot message each other, so there is no debate.
-
-## The review directory
-
-Everything this skill produces goes in one directory, resolved like this:
+## 前提条件
 
 ```bash
-review_dir="$(git rev-parse --path-format=absolute --git-path team-review)"
-mkdir -p "$review_dir"
+case "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" in 1|true|yes) ;; *) exit 1 ;; esac
+command -v codex
 ```
 
-Use `--git-path`. Do not build the path from `--show-toplevel`: in a linked worktree or submodule, `<toplevel>/.git` is a file, not a directory.
+agent teams は実験的機能で、既定では無効。1 つ目の判定に失敗したら、`~/.claude/settings.json` の `"env"` に `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` を追加してセッションを再起動するよう報告し、停止する。通常の subagent で代替してはならない。subagent は互いにメッセージを送れないため、議論が成立しない。
 
-## Worktree safety
+`codex` が無い場合はその旨を伝え、Claude 側のレビュアーだけで続けるかをユーザーに聞く。同じモデル系統だけでレビューするのは、このスキルが前提にしている相互チェックではないので、続行はユーザーの判断とする。
 
-The default review scope is uncommitted work. Anything that "cleans up" the tree destroys the thing under review.
+## このスキルは何も残さない
 
-**No participant may run any command that changes HEAD, the index, or any path in the reviewed working tree**, in any phase. This covers Git commands, shell file operations, formatters, generators, and build steps — not only the examples below.
+リポジトリには何も書き込まない。レビュー用のディレクトリも作らない。teammate は spawn プロンプトからブリーフィングを読み、指摘はメッセージで送る。
 
-Examples, not an exhaustive list:
+唯一の例外が Codex の回答で、これは `codex exec` がテキストを返す手段がファイルだからである。Phase 5 で一時ディレクトリに書き、同じシェル呼び出しの終了時に削除する。
+
+## ワークツリーの保護
+
+既定のレビュー範囲は未コミットの作業である。ツリーを「きれいにする」操作は、レビュー対象そのものを破壊する。
+
+**どのフェーズでも、HEAD・index・レビュー対象ワークツリーのパスを変更するコマンドを実行してはならない。** Git コマンドだけでなく、シェルのファイル操作、フォーマッタ、コード生成、ビルドも含む。以下は例であって全部ではない。
 
 ```
-git stash (any form)   git clean (except -n / --dry-run)
-git reset (any form)   git switch
-git checkout           git restore
-gh pr checkout         rm / mv / overwriting cp
+git stash（すべての形式）   git clean（-n / --dry-run を除く）
+git reset（すべての形式）   git switch
+git checkout               git restore
+gh pr checkout             rm / mv / 上書きする cp
 ```
 
-The one exception is Phase 8 step 4, where the main agent applies fixes the user authorized. The Roles table and Phase 8 already bound that; nothing else here overrides it.
+例外は Phase 6 step 3 だけで、そこで main agent がユーザーの承認した修正を適用する。
 
-Reviewers never read this file. Their copy of this rule is the prompt in Phase 4; change both together.
+レビュアーはこのファイルを読まない。同じ内容を Phase 4 のプロンプトに書いてある。片方だけ書き換えてはならない。
 
-Read modified, staged, and untracked files, review them, and leave them where they are. Do not move them to `/tmp` or any holding directory either.
+変更済み・ステージ済み・未追跡のファイルを読み、レビューし、そのままの場所に置いておく。`/tmp` などの退避先にコピーしない。ブランチの切り替えが本当に必要なら、その操作を名指しでユーザーに確認する。
 
-Write everything this review produces to `$review_dir`. Do not build a clean tree — no phase needs one. If a branch change is genuinely needed, stop and ask for that exact operation.
+pull request は `gh pr view` と `gh pr diff` で読む。
 
-Read pull requests with `gh pr view` and `gh pr diff`.
+## 起動モード
 
-## Invocation modes
+**leader モード**（`--ringmaster` なし）: Phase 1〜4 を実行し、そのあと Phase 6 を実行する。
 
-This skill runs as two different participants, told apart by the arguments.
+**ringmaster モード**（`--ringmaster`）: Phase 5 だけを実行する。ブリーフィング・判定基準のパス・レビュアーの名前は spawn プロンプトで受け取る。
 
-**Leader mode** (no `--facilitator`): execute Phases 1-4, then Phase 8. This is the normal entry point — `/team-review`, or any request to review something.
+`references/…` のパスは、ハーネスが起動時に伝えるスキルのベースディレクトリ（`Base directory for this skill: …`）を基準に解決する。カレントディレクトリを基準にしてはならない。
 
-**Facilitator mode** (`--facilitator --briefing <path> --report <path>`): execute Phases 5-7 only. Read the briefing from the given path and write the report to the given path.
+## Phase 1: レビュー範囲の決定（leader）
 
-Resolve every `references/…` path against the skill's base directory, which the harness states on invocation (`Base directory for this skill: …`). Never against the current working directory.
-
-## Phase 1: Determine Scope (leader)
-
-Use the scope the user gave. If none was given, default to everything uncommitted — **including untracked files**:
+ユーザーが範囲を指定したならそれに従う。指定が無ければ未コミットの変更すべてを対象にする。**未追跡ファイルも含める。**
 
 ```bash
 { git diff HEAD --name-only; git ls-files --others --exclude-standard; } | sort -u
 ```
 
-`git diff HEAD` alone omits untracked files, so a newly added file is silently excluded from its own review. If both commands produce no paths, report that the scope is empty and stop.
+`git diff HEAD` だけでは未追跡ファイルが漏れる。新規追加したファイルが、そのファイル自身のレビューから外れる。両方のコマンドが 1 件も返さなければ、範囲が空であることを報告して停止する。
 
-## Phase 2: Determine Review Type (leader)
+## Phase 2: レビュー種別の決定（leader）
 
-Classify the scope:
+- **Plan** — 実装計画、タスクリスト、他のエージェントが実行する手順書
+- **Design** — アーキテクチャ文書、設計判断
+- **Code** — ソースコード（既定）
 
-- **Plan** — implementation plans, task lists, TODO documents
-- **Design** — architecture docs, design decisions
-- **Code** — source code files (default)
+`references/<type>.md` を読み、観点と Severity 基準を得る。
 
-Read `references/<type>.md` (plan.md / design.md / code.md) for this type's criteria and severity table. Name the type in the briefing so the facilitator reads the same file.
+**ドメイン**をパスと拡張子から判定する。
 
-**Domain criteria.** Detect the domains the scope touches, from file paths and extensions:
+- **fe** — `.tsx`/`.jsx`/`.vue`/`.svelte`、`components/`、`styles/`、`.css`/`.scss`
+- **be** — `server/`、`api/`、`controllers/`、`models/`、`.sql`、ORM・マイグレーション
+- **infra** — `Dockerfile`、`docker-compose*`、`*.tf`、k8s マニフェスト、`.github/workflows/`
 
-- **fe** — `.tsx`/`.jsx`/`.vue`/`.svelte`, `components/`, `styles/`, `.css`/`.scss`
-- **be** — `server/`, `api/`, `controllers/`, `models/`, `.sql`, ORM/migration files
-- **infra** — `Dockerfile`, `docker-compose*`, `*.tf`, k8s manifests, `.github/workflows/`
+該当するドメインごとに `references/domains/<domain>.md` を読む。種別の観点に追加する形で使う。
 
-Read `references/domains/<domain>.md` for each detected domain and name them in the briefing. These criteria are additive to the type criteria. Multiple domains may apply to one scope.
+## Phase 3: ブリーフィング（leader）
 
-## Phase 3: Briefing (leader)
+レビュアーは会話の文脈を持っていない。1 ページに収まる短いブリーフィングを書き、各 teammate の spawn プロンプトに入れる。ブリーフィング用のファイルは作らない。レビュアーはリポジトリを自分で読めるので、ブリーフィングには**リポジトリを読んでも分からないことだけ**を書く。
 
-The reviewers have no conversation context. Give them enough to avoid wasted effort, and nothing that would tell them what to conclude.
+**書くもの:**
 
-**Include — facts:**
+| 項目 | リポジトリから得られない理由 |
+|------|------------------------------|
+| 何を変更したか（機械的に） | ワークツリーの変更のうちどれが今回のレビュー対象かは、どこにも書かれていない |
+| レビュー範囲の内と外 | 同上 |
+| 意図的に未完成な箇所（**事実だけ。理由は書かない**） | 書きかけのコードと書き忘れたコードは見分けがつかない |
+| レビュー種別と、判定基準ファイルの絶対パス | Severity 基準の出どころが必要 |
+| 規約文書の場所（`docs/adr/`、`CONTRIBUTING.md`、`CLAUDE.md`） | 探し回らせないため |
 
-- What the change does, in a few sentences
-- Scope boundaries: which paths are under review and which are not
-- Anything deliberately unimplemented, stubbed, or left as a TODO, and why
-- Review type and detected domains, with the `references/` files that apply
-- Dependency and version summary
-- Location of convention or decision docs (`docs/adr/`, `CONTRIBUTING.md`, `CLAUDE.md`)
+**書かないもの（結論）:** 「この設計判断は妥当」「これはユーザーと合意済み」「これがこのプロジェクトの流儀」、および意図的な省略の理由。決着済みだと伝えられたレビュアーはそこを調べるのをやめる。意図的な省略が実際に問題を起こしているなら、それこそ必要な指摘である。未完成であることは書き、問題ないとは書かない。
 
-**Exclude — conclusions:**
+変更内容は機械的に書く。どのフェーズ・ファイル・関数が動いたかであって、なぜ良いかではない。書いたのは自分なので、正当化を渡されたレビュアーはそれを受け入れがちになる。
 
-- "This design decision is sound"
-- "This approach was already agreed with the user"
-- "This is the project's established pattern"
+**依存バージョンの要約と deepwiki の事前確認をここでしてはならない。** レビュアーはロックファイルを自分で読む。どのライブラリが重要かは、変更ファイルを読んだレビュアーの方が正確に判断できる。この作業は Phase 4 でレビュアーのプロンプトに入れる。leader がここでやると、他の参加者が必要としない情報で leader のコンテキストを消費することにもなる。
 
-Brief them on constraints, not on verdicts. A reviewer told that something is settled stops examining it.
-
-**Dependency versions** (Code and Design scopes). Summarize version info from manifests or lockfiles present in the repo (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `build.gradle.kts`, `pom.xml`, `gradle/libs.versions.toml`). This is what lets a reviewer judge whether an API is deprecated for the versions actually in use.
-
-**Version fact-check with deepwiki** (Code and Design scopes, when the deepwiki MCP is available). Read `references/deepwiki.md` and follow it: identify the exact versions of the language, runtime, framework, and the libraries the changed files import; resolve each to its GitHub repo; ask what that **specific version** recommends and what it deprecated. Cap this at 5 targets. Add the answers to the briefing as quoted facts with their source.
-
-Reviewers cannot report a problem in a version released after their training data, and they do not know that they cannot. This step is what covers that gap. Skip it when the MCP is unavailable, and say so in the briefing so the report can record the skip.
-
-**Check for `self-review`** in both scopes, and record which check was used:
+**`self-review` の有無**を両スコープで確認する。リポジトリルートからの絶対パスで判定する。
 
 ```bash
-test -f .claude/skills/self-review/SKILL.md || test -f ~/.claude/skills/self-review/SKILL.md
+root="$(git rev-parse --show-toplevel)"
+test -f "$root/.claude/skills/self-review/SKILL.md" || test -f ~/.claude/skills/self-review/SKILL.md
 ```
 
-Checking only the user scope reports "not installed" for a project-scoped or plugin-provided skill, and the report then claims a reviewer was unavailable when it was not.
+ユーザースコープだけを見ると、プロジェクトスコープに入っているスキルを「未インストール」と誤判定し、レポートに「レビュアーが不在だった」と嘘を書くことになる。
 
-Write the briefing to `$review_dir/briefing-<UTC timestamp>.md`.
+## Phase 4: チームの spawn（leader）
 
-## Phase 4: Spawn the Team (leader)
+次の順で spawn し、**依頼した名前ではなくツールが返した名前**を使う。
 
-Decide the report path here, not later — the facilitator writes to exactly this name:
+1. **ringmaster を単独で spawn** し、結果の `name` を読む。
+2. **レビュアーを spawn** する。各レビュアーの送信先には、1 で返ってきた ringmaster の名前を書く。レビュアーの返り名も読む。
+3. **ringmaster にメッセージを 1 通送り**、2 で返ってきた名前でレビュアーを伝える。
+
+この順序には理由がある。名前は保証されない。同じセッションで前のレビューの teammate が名前を保持していると、2 つ目の `ringmaster` は `ringmaster-2` として起動され、素の `ringmaster` は終了したセッションを指したままになる。`ringmaster` に送れと指示されたレビュアーは、とっくに終わったレビューに指摘を届ける。全員を一度に spawn して、意図した名前をプロンプトに書くと、これが起きる。
+
+`Agent` の各呼び出しには、役割表どおりの `name` と `model` を渡す。**teammate は leader の `/model` を継承しない。** `model` を指定しなければ `/config` の Default teammate model が使われる。
+
+`self-reviewer` は Phase 3 でインストール済みと判定できたときだけ spawn する。Claude 側 1 人と Codex の 2 者でもレビューは成立する。
+
+### 絶対パスだけを渡す
+
+**teammate のプロンプトに書くパスは、すべて絶対パスに展開する。** シェル変数を書かない。`references/plan.md` のような相対パスを書かない。teammate に埋めさせる `<プレースホルダ>` を残さない。teammate は別プロセスであり、leader のシェル変数は存在せず、作業ディレクトリはレビュー対象のリポジトリになる。相対パスの `references/…` は存在しないパスに解決される。その結果、レビュアーは Severity 基準を持たないままレビューし、そのことを報告もしない。
+
+### レビュアーへのプロンプト
+
+各レビュアーのプロンプトには、ブリーフィング本文、判定基準ファイルの絶対パス、`references/deepwiki.md` の絶対パス、レビュー範囲、ringmaster の実際の名前、そして以下の文言をそのまま含める。レビュアーはこの SKILL.md を読まないので、ここにだけ書いたルールは届かない。
+
+```
+レビュー範囲は自分で読む。指摘を報告する前に、その指摘を自分で確かめる。
+どの入力・状態で何が起きるかを書く。
+
+非推奨・削除済み・非慣用だと主張する前に、ロックファイルを読んで実際に
+入っているバージョンを使う。記憶を根拠にしない。deepwiki MCP が使える
+なら <references/deepwiki.md の絶対パス> の手順に従う（パッケージから
+GitHub リポジトリを解決する方法と、推測で組み立てない決まりが書いてある）。
+変更ファイルが import しているライブラリについて、そのバージョンでの推奨と
+非推奨を尋ね、回答を根拠として引用する。対象は最大 5 件。
+
+指摘を報告するだけで、ファイルの変更・作成・削除はしない。チェックアウト
+状態も変えない。git stash / clean / reset / switch / checkout / restore と
+gh pr checkout は使わない。PR は gh pr view / gh pr diff で見る。
+
+指摘は teammate "<ringmaster の名前>" に SendMessage で送る。すべての指摘に
+ついて、下の書式の 5 項目すべてを省略せずに書く。要約しない。このメッセージ
+だけが他の参加者に届く。自分の手元に残したものは誰も読まない。team leader
+には送らない。
+
+待機を続ける。ringmaster から反論が届くので、ファイルに戻って答える必要が
+ある。最初の報告で自分の仕事が終わったと見なさない。
+```
+
+チェックアウトに関する行が実際に効く部分である。「ファイルを変更するな」は中身の書き換えの話に読めるため、`gh pr checkout <n>` や `git checkout <branch>` を止められない。これらのコマンドは追跡ファイルを置き換え、ユーザーの未コミット作業、つまりレビュー対象そのものを消す。
+
+`self-reviewer` には同じ内容に加えて、`self-review` スキルを実行するよう指示する。
+
+### ringmaster へのプロンプト
+
+```
+/team-review --ringmaster
+```
+
+これに加えて、ブリーフィング本文、判定基準ファイルの絶対パス、レビュー種別、レビュー範囲、そしてレビュアーを spawn したあとにその実際の名前を渡す。
+
+### spawn 後
+
+レビューを開始したことをユーザーに 1 行で伝え、ターンを終える。teammate が動いている間に自分でレビューを始めてはならない。teammate を polling してもならない。アイドル表示の teammate は、実行中のコマンドを待っているだけのことがある。メッセージは自動で届く。
+
+teammate が権限プロンプトに当たると、このセッションに表示される。ユーザーに渡す。teammate の代わりに承認してはならない。
+
+## Phase 5: Codex の実行・議論・結論（ringmaster）
+
+### 1. 最初に Codex を動かす
+
+他の何かを待つ前に実行する。数分かかり、その数分は Claude 側レビュアーが読んでいる時間と並行する。
+
+1 ラウンドは 2 段階で行う。まず一時ディレクトリを作り、リクエストを `Write` ツールでその中に書く。
 
 ```bash
-report_path="$review_dir/report-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
+mktemp -d "${TMPDIR:-/tmp}/team-review.XXXXXX"
 ```
 
-Spawn all four teammates with the `Agent` tool, one call per teammate, in a single response so they start together. Teammates cannot spawn teammates, so the reviewers must be started here rather than by the facilitator.
+**リクエストをシェルの引数やヒアドキュメントで組み立ててはならない。** ブリーフィングにも、後のラウンドで逐語引用する指摘にも、任意の文字列が入りうる。バッククォート、`$`、そしてヒアドキュメントの区切り文字と同じ内容の行。区切り文字と一致する行があるとヒアドキュメントはそこで終わり、残りの行がシェルコマンドとして実行される。終了コードは 0 のままなので、失敗したことが誰にも分からない。リクエストを `Write` ツールでファイルに書き、標準入力から渡せば、これらの場合がすべて消える。
 
-Each call passes `name` and `model` exactly as the Roles table gives them. **A teammate does not inherit the leader's `/model`** — without `model` it takes whatever `/config` has as the default teammate model, which is not what this skill assumes.
-
-**Skip `self-reviewer` entirely when `self-review` is not installed.** Two reviewers is a valid team; do not substitute anything in its place.
-
-### Reviewer prompts
-
-Every reviewer prompt — the Codex request, the `code-review` invocation, and the `self-review` invocation alike — carries the briefing path, the applicable `references/` files, and these lines verbatim. A reviewer never reads this SKILL.md, so a rule that stays here does not reach it.
-
-```
-Report findings only. Do not modify, create, or delete any file.
-Do not change the checkout: no git stash, clean, reset, switch, checkout,
-restore, and no gh pr checkout. Inspect a PR with gh pr view / gh pr diff.
-Send your findings to the teammate named "facilitator" using SendMessage.
-Do not message the team leader.
-Write findings longer than 20 lines to <review_dir>/findings-<your name>.md
-and send the facilitator a summary plus that path.
-Stay available for follow-up questions until the facilitator says the review
-is finished.
-```
-
-The checkout line is the one that does the work. "Do not modify files" reads as being about file contents, so it does not stop `gh pr checkout <n>` or `git checkout <branch>` — and `code-review` accepts a PR number as a target, so it has a real reason to reach for them. Those commands replace tracked files and discard the user's uncommitted work, which is usually the very thing under review.
-
-The routing lines keep the debate out of the leader's context window. Reviewer output that lands in the leader's session competes with the user's conversation for the same window.
-
-`cc-reviewer` needs one more line:
-
-```
-The code-review skill will tell you to report findings with the ReportFindings
-tool. Whatever that tool does here, it does not reach the facilitator. Put the
-full findings in your SendMessage to the facilitator as text as well.
-```
-
-### Codex command
-
-`codex-reviewer` runs:
+次に、以下を 1 回の Bash 呼び出しで実行する。`timeout: 600000` を指定する。
 
 ```bash
-codex exec --sandbox read-only --cd <project_directory> -o "$review_dir/codex-<purpose>.md" "<request>" < /dev/null
+tmpdir='<mktemp が出力したディレクトリ>'
+cleanup() {
+  case "$(basename -- "${tmpdir:-/}")" in
+    team-review.??????) [ -n "$tmpdir" ] && [ -d "$tmpdir" ] && rm -rf -- "$tmpdir" ;;
+  esac
+}
+trap cleanup EXIT INT TERM
+
+codex exec --sandbox read-only --cd <プロジェクトディレクトリの絶対パス> \
+  -o "$tmpdir/codex.md" - < "$tmpdir/request.md" > /dev/null
+status=$?
+if [ "$status" -ne 0 ] || [ ! -s "$tmpdir/codex.md" ]; then
+  echo "CODEX_FAILED status=$status"
+  exit 0
+fi
+cat "$tmpdir/codex.md"
 ```
 
-Keep every flag as written (verified against codex-cli 0.147.0):
+各部分をこのまま保つ（codex-cli 0.147.0 で確認済み）。
 
-- No `--full-auto`. That flag does not exist on `codex exec` and the call fails outright. `--sandbox read-only` already prevents writes.
-- `< /dev/null` closes stdin, which Codex otherwise waits on.
-- `-o <file>` captures the final message. Read findings from that file, not the run log.
-- Keep `-o` inside the review directory, never the repo root.
+- **プロンプト位置の `-`** で、Codex はリクエストを標準入力から読む。`codex exec --help` の記述: "If not provided as an argument (or if `-` is used), instructions are read from stdin."
+- **`-o "$tmpdir/codex.md"` と `> /dev/null`。** Codex は標準出力に長い実行ログを流し、最終メッセージはその末尾に埋もれる。実際のレビュー範囲ではログが長く、ツール出力が途中で切られて回答が失われる。`-o` が最終メッセージだけを取り、`> /dev/null` がログを捨て、`cat` が回答だけを返す。
+- **終了ステータスと非空の判定。** ログイン期限切れ、ネットワーク障害、タイムアウトのいずれでも `codex.md` は無いか空になる。この判定が無いと、Codex が何も見つけなかったかのようにレビューが進み、2 者のうち 1 者を失ったままレポートには 2 者と書かれる。`CODEX_FAILED` が出たら 1 回だけ再実行する。再度失敗したら Claude 側のレビュアーだけで続け、レポートに `不在: <失敗の内容>` と書く。
+- **削除の判定。** このコマンドが作った `team-review.XXXXXX` の形に一致する名前のディレクトリだけを削除する。空・未定義・想定外のパスはどれにも一致せず、何も削除されない。`${TMPDIR:-/tmp}` により、削除対象はプラットフォーム標準の一時ディレクトリ（macOS ではユーザーごとの `/var/folders` 配下）に限られる。強制終了された場合はディレクトリが残るが、数 KB がシステムの一時ディレクトリに残るだけで、リポジトリには何も残らない。
+- **`--full-auto` を付けない。** このフラグは `codex exec` に存在せず、付けると呼び出し自体が失敗する。`--sandbox read-only` で書き込みは既に防いでいる。
+- **Bash 呼び出しの `timeout: 600000`。** 実際のレビュー範囲では数分かかり、既定の 120 秒では途中で打ち切られて回答が欠ける。
 
-Every request sent to Codex MUST include both sentences verbatim:
+回答はコマンドの出力から読み、必要な内容を自分のコンテキストに保持する。呼び出しが返った時点でファイルは消えている。
 
-1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
-2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
+### リクエストに必ず含めるもの
 
-### code-review level
+初回の呼び出しにも、議論の各ラウンドにも、同じものを含める。議論ラウンドは初回の記憶を持たない新しいプロセスであり、指摘と反論だけを渡すのは、Severity の表を見たことがない相手に Severity を答えさせることになる。
 
-`cc-reviewer` always passes `high` explicitly. With no level the skill reuses whatever level was typed last, which makes results vary between runs. `high` includes findings the reviewer is unsure about; the debate removes the ones that do not hold up.
+- ブリーフィング本文
+- レビュー範囲と、その内外の境界
+- 判定基準ファイルと `references/deepwiki.md` の絶対パス
+- 下の指摘の書式
+- レビュアーに渡したのと同じロックファイルのルール（Codex は MCP を持たないので、deepwiki の部分を除いたロックファイルの部分だけ）
+- 以下の 2 文をそのまま
+  1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
+  2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
 
-### Facilitator prompt
+### 2. 指摘の書式
 
-The facilitator is spawned with:
+Codex からのものもレビュアーからのものも、以下をすべて持つ。最後の 2 つが欠けている指摘は議論にかけられない。提出者に差し戻してから先へ進む。
+
+| 項目 | 内容 |
+|------|------|
+| id | `C1`、`H2` など。この実行中は変えない |
+| severity | `references/<type>.md` の基準による |
+| location | `file:line`、見出し、またはステップ番号 |
+| claim | 何が問題かを 1 文で |
+| evidence | どの入力・状態で何が起きるか。それを示すコードの経路 |
+
+### 3. 収集
+
+Codex には数分かかるので、返ってきた時点でレビュアーは報告済みのことが多い。誰が報告済みかを確認し、沈黙は待つのではなく追いかける。
+
+1. **未報告のレビュアーに、直接メッセージを 1 通送る。** 状況を尋ねるのではなく、指摘を今送るよう求める。レビュアーが黙る原因には、自然に解消しないものがある。権限プロンプトで止まっている、手元に書いたまま送らずにターンを終えた、失敗した。どれもこちらを起こすメッセージを生まないので、待っても永久に来ない。
+2. **そのあとターンを終える。** 回答が届けば起きる。
+3. **2 回目の催促でも返らなければ**、答えた参加者だけで進み、沈黙した相手をレポートに `不在: 応答なし` と記録する。2 人のうち 1 人が欠けてもレビューは成立するが、終わらないレビューは成立しない。
+
+このために sleep・polling・待機ループを使ってはならない。催促そのものが仕組みである。
+
+### 4. 議論
+
+- **一致** — Codex とレビュアーが同じ問題を挙げた。反論にかけず、そのままトリアージへ。
+- **対立** — 片方が挙げ、もう片方が否定している。
+- **単独** — 片方が挙げ、誰も反論していない。挙げていない側に反論させる。誰も検討していない指摘は、1 人だけで作業したレビュアーの指摘と同じ価値しかない。
+
+指摘は id・severity・location・claim・evidence の 5 項目を省略せずに引用する。言い換えない。そのうえで、3 択の判定と根拠を求める。
 
 ```
-/team-review --facilitator --briefing <absolute briefing path> --report <absolute report path>
+<指摘の全文。5 項目すべて>
+
+<反論の全文>
+
+ファイルに戻って確認し、次のいずれか 1 つだけで答える:
+  maintain / downgrade to <severity> / withdraw
+そして根拠を書く。確認したファイルと行、そこで何を見つけたか。
+率直に、遠慮なく反論してよい。
 ```
 
-Invoking the skill rather than telling the facilitator to read a file is what makes `references/` resolvable: the harness supplies the skill's base directory, so no path has to be copied into the prompt and none can be copied wrong.
+Claude 側のレビュアーには `SendMessage` で送る。Codex には次の `codex exec` で送る。初回とまったく同じ手順で組み立てる。一時ディレクトリを作り、リクエストをファイルに書いて標準入力から渡し、「リクエストに必ず含めるもの」をすべて再送する。Severity を答えさせるラウンドのリクエストに、Severity の表が入っていなければならない。
 
-Add the reviewer names that were actually spawned, so the facilitator knows how many findings to wait for.
+**中身の当否を自分で決めてはならない。** レビュー範囲を読んでいない。Codex の言葉は Codex が書いたまま運ぶ。Codex の判定を自分の判定に置き換えない。ringmaster が決めてよいのは以下だけ。
 
-### After spawning
+| 状況 | 結論 |
+|------|------|
+| 両者が支持した | 維持 |
+| 提起者が撤回した | 除外 |
+| 提起者が降格した | その Severity で維持 |
+| 2 ラウンド経ても両論が並んだまま | 未決着。両方の立場を記録する |
 
-Say one line to the user — the review is running, the teammates are in the agent panel — and end the turn.
+**バージョンに関する指摘は議論ではなく証拠で決める。** ある API が非推奨・非慣用・削除済みだという指摘には、`references/deepwiki.md` の手順で、そのバージョンを明示して deepwiki に問い合わせる。裏が取れたら指摘を維持して回答を引用する。否定されたら取り下げる。答えが得られなければ **未検証** として Severity を 1 段下げる。この確認は議論のラウンド数に数えない。
 
-**Do not review the scope yourself while the team works, and do not poll them.** Teammates deliver their own completion notifications; there is nothing to watch. Starting the review in the leader session duplicates the work and fills the window the user is talking to.
+**1 論点あたり 2 往復まで。** 3 ラウンド目を始めてはならない。
 
-If a teammate hits a permission prompt, it appears in this session. Hand it to the user; do not answer on the teammate's behalf.
+### 5. トリアージ
 
-## Phase 5: Debate (facilitator)
+`references/<type>.md` の表で Severity を付ける。LOW はすべて落とす。
 
-Wait until every spawned reviewer has reported. When you have nothing to do until a reviewer answers, say so and end your turn — a reviewer's message wakes you.
+残りを、修正が一意に決まるかどうかで分ける。これは main agent への提案であって決定ではない。
 
-### Finding format
+**修正を提案する** — 以下をすべて満たす。正しい挙動が一意に定まる。妥当な修正が 1 つしかない。修正がレビュー範囲の内側に収まり、新しい依存・スキーマ変更・公開 API の変更を必要としない。議論の結果が未決着ではない。
 
-Every finding must point at a location and state a concrete failure:
+**判断が必要** — 以下のいずれかに当たる。妥当な修正が複数あり、選択が設計判断になる。意図した挙動が不明で、レビュアーの見解が割れた。修正がレビュー範囲の外に及ぶ。議論が未決着で終わった。
 
-| Type | Location | Failure |
-|------|----------|---------|
-| Code | `file:line` | The input or state that makes it break, and what happens |
-| Design | Section heading or a quote from the document | What breaks, at what load or in which failure mode |
-| Plan | Step number or heading | Which step cannot proceed, and why |
+迷ったら「判断が必要」に入れる。
 
-A finding with no concrete failure cannot be argued about — send it back to its author for one before proceeding.
+### 6. 結論を送る
 
-### Grouping
-
-- **Agreed** — two or more reviewers raised the same issue. Skip the debate; carry to Phase 6.
-- **Contested** — one reviewer raised it and another disagrees.
-- **Single-source** — one reviewer raised it and no one has spoken against it.
-
-Debate the contested set, and put every single-source finding up for challenge by sending it to the reviewers that did not raise it. A finding no one examined is not worth more than a finding from a single reviewer working alone.
-
-### Running the debate
-
-Route messages with `SendMessage` to the named reviewers. Each answers for its own tool: `codex-reviewer` relays counterarguments into a follow-up `codex exec` call and brings back the reply, so Codex participates through its courier.
-
-Every debate message includes the finding quoted verbatim, the counterargument, and "Be frank and direct. Don't hold back — push back candidly." Messages to `codex-reviewer` also carry the two mandatory Codex prompt rules.
-
-**Version findings are settled by evidence, not by argument.** When a finding claims an API is deprecated, non-idiomatic, or removed, do not let the reviewers argue it from memory. Query deepwiki per `references/deepwiki.md`, with the exact version, and apply the outcome: confirmed keeps the finding and cites the answer; contradicted drops it; unanswerable marks it **未検証** and lowers its severity by one step. This does not consume a debate round.
-
-**Round limit: 2 round trips per point.** If the reviewers have not converged after two rounds, stop and carry the finding forward marked unresolved, recording both positions. Do not open a third round.
-
-Record for each debated point: the topic, who held which position, and the outcome (withdrawn / upheld / unresolved). Withdrawn findings are dropped; upheld and unresolved findings continue.
-
-## Phase 6: Triage (facilitator)
-
-Assign severity from the `references/<type>.md` table. Drop everything at LOW.
-
-Split what remains by whether the fix is uniquely determined. This is a proposal to the main agent, not a decision.
-
-**Proposed for fixing** — all of the following hold:
-
-- The correct behavior is unambiguous
-- Exactly one reasonable fix exists
-- The fix stays inside the reviewed scope and needs no new dependency, schema change, or public API change
-- The debate outcome was not unresolved
-
-**Proposed for the user's decision** — any of the following holds:
-
-- Multiple viable fixes exist and choosing between them is a design decision
-- The intended behavior is unclear and the reviewers disagreed about it
-- The fix reaches outside the reviewed scope
-- The debate ended unresolved
-
-When in doubt, propose it for decision.
-
-## Phase 7: Write the Report File (facilitator)
-
-Write to the **exact absolute path the leader supplied**. Do not generate a filename.
-
-Write the complete content to `<report path>.tmp`, confirm the temporary file is non-empty, then rename it to `<report path>`.
+届いている回答をすべて反映する。この結論を組み立てている最中に届いたものも含める。そのうえで main agent にメッセージを 1 通送り、停止する。レビュアーには何も言わない。このメッセージが届き次第 main agent がチーム全体を解散させるので、終了の挨拶は相手を起こすだけになる。
 
 ```markdown
 ## スコープ
-<files reviewed>
+<レビューしたファイル>
 
 ## レビュアー
-codex / code-review (high) / self-review — 未インストールのものは「不在」と理由を明記する
+codex / claude-reviewer / self-reviewer — 走らなかったものは「不在」と理由を明記する
 
 ## バージョン確認
-deepwiki で確認: <name> v<version>, ... ／ 未使用（MCP が利用できないため）
+deepwiki で確認: <name> v<version>, ... ／ 未使用（<理由>）
 
 ## 修正を提案する指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-- **指摘**: <what is wrong>
-- **再現条件**: <input or state> のとき <result>
-- **提案する修正**: <the one fix>
+- **指摘**: <claim>
+- **再現条件**: <入力・状態> のとき <結果>
+- **提案する修正**: <一意に決まる修正>
 - **Severity**: CRITICAL / HIGH / MEDIUM
-- **議論**: 一致（N人） / 対立→維持 / 単独→反論なし
+- **議論**: 一致 / 反論→維持 / 反論→降格 / 単独→反論なし
 
 ## 判断が必要な指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-- **指摘**: <what is wrong>
-- **現在の挙動**: <input or state> のとき <result>
-- **選択肢**: A: <approach> — <trade-off> / B: <approach> — <trade-off>
-- **判断が必要な理由**: <why it cannot be decided mechanically>
+- **指摘**: <claim>
+- **現在の挙動**: <入力・状態> のとき <結果>
+- **選択肢**: A: <案> — <トレードオフ> / B: <案> — <トレードオフ>
+- **判断が必要な理由**: <機械的に決められない理由>
 
 ## 議論の記録
-- **論点**: <topic> / **主張**: <reviewer> は <position>、<reviewer> は <position> / **結論**: 取り下げ / 維持 / 未決着
+- **論点**: <topic> / **主張**: <誰> は <立場>、<誰> は <立場> / **結論**: 取り下げ / 維持 / 降格 / 未決着
 ```
 
-A reviewer that did not run stays in the レビュアー list with its reason. Omitting it turns "we never checked" into something indistinguishable from "we checked and found nothing".
+走らなかった参加者も、理由を添えてレビュアー欄に残す。省くと「確認していない」と「確認して問題がなかった」が区別できなくなる。
 
-Then tell the reviewers the review is finished, send the leader one message — the absolute path of the report file and nothing else — and stop. Do not paste the report body into that message.
+## Phase 6: 解散・取捨・修正・報告（leader）
 
-## Phase 8: Filter, Fix, Report (leader)
+### 1. チームを解散する
 
-### 1. Collect the report
+結論はチームの最後の出力である。届いた時点で、spawn した teammate 全員（ringmaster を含む）に名指しでシャットダウン要求を送り、それぞれの終了を確認する。指摘に手を付ける前に行う。取捨・修正・報告は main agent だけの仕事で、どれも teammate を必要としない。
 
-Read the report file with the `Read` tool, at the path in the facilitator's message.
+アイドル状態の teammate は終了していない。セッションが終わるまで名前を保持するため、次のレビューは `ringmaster-2` として起動され、素の名前は前回の実行を指したままになる。`ringmaster` に送れと指示されたレビュアーは、何時間も前に終わったレビューに指摘を届ける。解散は、次の実行のために名前を空けておく操作でもある。
 
-If a teammate reported a failure instead of a result, decide whether to re-spawn that reviewer or to continue with the rest, and record the gap for the report.
+### 2. 会話の文脈で取捨する
 
-### 2. Shut down the team
+main agent にしかできない工程である。会話で既に決着している指摘を落とす。意図的に選んだ挙動、意図的に後回しにした作業、ユーザーが依頼していない範囲のファイル。
 
-Only after the report has been read, ask each teammate to shut down by name, e.g. "Ask the facilitator teammate to shut down". A teammate that keeps running keeps sending idle notifications into this session.
+**落とした指摘は理由と一緒にすべて記録する。** レビュー対象を書いたのは自分であり、自分の仕事を公平に判断できない立場にいる。黙って落とすと、レビューチームが存在する理由そのものが消える。
 
-### 3. Filter against conversation context
+### 3. 編集が承認されているときだけ修正する
 
-This is the step only the main agent can perform. Drop findings that the conversation already settles: behavior that was deliberately chosen, work that is intentionally deferred, files outside what the user asked for.
+レビュー・確認・報告の依頼は、編集の承認ではない。「レビューして」は指摘を求めている。「レビューして直して」は変更を求めている。
 
-**Record every exclusion with its reason.** You wrote the code under review, so you are the participant least able to judge your own work impartially — a silent exclusion removes the very check the review team exists to provide. Listing exclusions lets the user overrule you.
+編集が承認されている場合、取捨後に残った修正候補を適用し、プロジェクトに型チェッカー・リンター・テストがあれば 1 件ずつ確認する。承認されていない場合は何も変更せず、下の「修正を提案する指摘」の節を使う。
 
-### 4. Apply fixes only when edits are authorized
+### 4. 報告
 
-A request to review, inspect, or report does not authorize edits. "review this" asks for findings; "review and fix" asks for changes.
-
-When edits are authorized, apply what survives from the fixing set, and verify each with the project's typechecker, linter, or tests where they exist.
-
-When they are not, change nothing and report the proposed fixes under 修正を提案する指摘 instead, with the replacement text.
-
-### 5. Report
-
-Report in Japanese:
+日本語で報告する。「修正した指摘」は実際に編集した分だけに使う。この時点でチームは既に解散しており、以下の内容はすべて受け取った結論から書く。
 
 ```
 ## レビュー結果
 
-### スコープ
-<files reviewed>
-
-### レビュアー
-codex / code-review (high) / self-review（不在の場合は理由も）
-
-### バージョン確認
-deepwiki で確認: <name> v<version>, ... ／ 未使用
+### スコープ / レビュアー / バージョン確認
+<結論の内容をそのまま。不在の参加者はその理由も>
 
 ---
 
 ## 修正した指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-**指摘**: <what was wrong>
-**修正前の挙動**: <concrete input or state> のとき <concrete result>
-**修正後の挙動**: 同じ入力で <concrete result>
-**変更内容**: <what was edited>
+**指摘**: <何が問題だったか>
+**修正前の挙動**: <具体的な入力・状態> のとき <具体的な結果>
+**修正後の挙動**: 同じ入力で <具体的な結果>
+**変更内容**: <何を編集したか>
+
+---
+
+## 修正を提案する指摘（編集は未承認）
+
+### 1. <title>  `<file:line / 見出し / ステップ番号>`
+**指摘**: <何が問題か>
+**現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
+**提案する修正**: <置き換える内容そのもの>
 
 ---
 
 ## 判断が必要な指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
-**指摘**: <what is wrong>
-**現在の挙動**: <concrete input or state> のとき <concrete result>
+**指摘**: <何が問題か>
+**現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
 **選択肢**:
-- A: <approach> — <trade-off>
-- B: <approach> — <trade-off>
-**判断が必要な理由**: <why>
+- A: <案> — <トレードオフ>
+- B: <案> — <トレードオフ>
+**判断が必要な理由**: <理由>
 
 ---
 
 ## 除外した指摘（判断の記録）
-- <finding> — 除外理由: <reason>
+- <指摘> — 除外理由: <理由>
 
 ---
 
 ### 議論の記録
 **論点**: <topic>
-**主張**: <reviewer> は <position> / <reviewer> は <position>
-**結論**: 取り下げ / 維持 / 未決着（両論併記）
+**主張**: <誰> は <立場> / <誰> は <立場>
+**結論**: 取り下げ / 維持 / 降格 / 未決着（両論併記）
 ```
 
-Both behavior lines require concrete values — actual inputs, actual outputs, actual error messages. 「正しく動くようになった」 is not a report; 「空配列を渡すと `TypeError: cannot read length of undefined` で落ちていたのが、`0` を返すようになった」 is.
+挙動を書く 2 行には具体的な値を入れる。実際の入力、実際の出力、実際のエラーメッセージ。「正しく動くようになった」は報告ではない。「空配列を渡すと `TypeError: cannot read length of undefined` で落ちていたのが、`0` を返すようになった」が報告である。
 
-Omit 除外した指摘 when nothing was excluded, and 議論の記録 when nothing was contested or challenged.
+該当が無い節は省く。
 
-### Checking on a running review
+### 実行中のレビューの確認
 
-When the user asks how the review is going, look — do not report from memory. Select a teammate in the agent panel and read its transcript, or list what the team has produced so far:
+ユーザーに進捗を聞かれたら、記憶から答えず ringmaster にメッセージで尋ねる。この実行はファイルを残さず、`ListAgents` は teammate を一覧に出さず、アイドル表示の teammate は実行中のコマンドを待っているだけのことがある。メッセージが唯一の確認手段である。
 
-```bash
-ls -lt "$review_dir"
+```
+状況確認: 1 行で答える —
+PHASE n | 受領: <名前> | 待ち: <名前>
 ```
 
-Do this only when asked. The facilitator does not report progress on a schedule.
+同じメッセージが、止まったレビューを再開させる手段にもなる。teammate はメッセージを受け取ると再開する。
