@@ -12,7 +12,7 @@ Two ways in. They coexist: install whichever fits the agent you are using.
 
 ### Claude Code plugin
 
-Installs every skill except `team-review-copilot` (that one only runs inside GitHub Copilot CLI) in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
+Installs every skill except `cross-review-copilot` (that one only runs inside GitHub Copilot CLI) in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
 
 ```
 /plugin marketplace add rerelurelu/skillbox
@@ -29,9 +29,10 @@ Per-skill installs, and the only route for agents other than Claude Code. Instal
 
 ```bash
 gh skill install rerelurelu/skillbox deslop --agent claude-code --scope user
-gh skill install rerelurelu/skillbox team-review --agent claude-code --scope user
+gh skill install rerelurelu/skillbox cross-review --agent claude-code --scope user
 gh skill install rerelurelu/skillbox clean-code --agent claude-code --scope user
 gh skill install rerelurelu/skillbox decomposition --agent claude-code --scope user
+gh skill install rerelurelu/skillbox delegating-implementation --agent claude-code --scope user
 gh skill install rerelurelu/skillbox dig --agent claude-code --scope user
 gh skill install rerelurelu/skillbox fix-ci --agent claude-code --scope user
 gh skill install rerelurelu/skillbox creating-skills --agent claude-code --scope user
@@ -43,10 +44,10 @@ gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
 
-`team-review` needs Claude Code with agent teams enabled. For GitHub Copilot CLI install the Copilot-hosted variant instead:
+`cross-review` needs Claude Code 2.1.206+ and the `codex` CLI. For GitHub Copilot CLI install the Copilot-hosted variant instead:
 
 ```bash
-gh skill install rerelurelu/skillbox team-review-copilot --agent github-copilot --scope user
+gh skill install rerelurelu/skillbox cross-review-copilot --agent github-copilot --scope user
 ```
 
 ## Skills
@@ -54,10 +55,11 @@ gh skill install rerelurelu/skillbox team-review-copilot --agent github-copilot 
 | Skill | Purpose |
 |-------|---------|
 | [deslop](skills/deslop/SKILL.md) | Removes AI-generated slop from uncommitted changes |
-| [team-review](skills/team-review/SKILL.md) | A ringmaster teammate runs Codex CLI and argues its findings against a Claude reviewer teammate, then hands what survives to the main agent to filter, fix, and report (needs agent teams enabled and the `codex` CLI) |
-| [team-review-copilot](skills/team-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: the host session runs Codex CLI and argues its findings against a Copilot subagent reviewer (needs the `codex` CLI) |
+| [cross-review](skills/cross-review/SKILL.md) | The main agent, acting as Technical Review Lead, runs Codex CLI itself and argues its findings against a tool-restricted, resumable Claude reviewer subagent, applying YAGNI to both the reviewed code and the reviewers' own fix proposals before weighing survivors against the implementation plan, fixing, and reporting. Reviews uncommitted changes or a pull request by number (needs Claude Code 2.1.206+ and the `codex` CLI) |
+| [cross-review-copilot](skills/cross-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: the host session, acting as Technical Review Lead, runs Codex CLI and argues its findings against a Copilot subagent reviewer (needs the `codex` CLI) |
 | [clean-code](skills/clean-code/SKILL.md) | Post-implementation polish: simplify → deslop → dead-code/comment audit |
 | [decomposition](skills/decomposition/SKILL.md) | Decomposes complex tasks into atomic, executable todos |
+| [delegating-implementation](skills/delegating-implementation/SKILL.md) | Hands a reviewed implementation plan to a sonnet subagent, keeping the main agent's context free of the read/edit/test loop, then runs a plan-compliance check on the result |
 | [dig](skills/dig/SKILL.md) | Deep exploratory interview to surface hidden assumptions and risks in plans |
 | [fix-ci](skills/fix-ci/SKILL.md) | Automatically diagnoses and fixes CI failures in the current PR |
 | [creating-skills](skills/creating-skills/SKILL.md) | Authors new Agent Skills following the agentskills.io specification |
@@ -77,7 +79,7 @@ gh skill update --all
 Pin to a specific version when installing:
 
 ```bash
-gh skill install rerelurelu/skillbox team-review --pin v1.6.0
+gh skill install rerelurelu/skillbox cross-review --pin v1.6.0
 ```
 
 ## Local Development
@@ -85,7 +87,7 @@ gh skill install rerelurelu/skillbox team-review --pin v1.6.0
 Test a skill from a local checkout before publishing:
 
 ```bash
-gh skill install /path/to/skillbox team-review --from-local --agent claude-code --scope user
+gh skill install /path/to/skillbox cross-review --from-local --agent claude-code --scope user
 ```
 
 ## Authoring New Skills
