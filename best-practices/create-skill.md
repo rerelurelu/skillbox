@@ -214,6 +214,8 @@ The `description` field enables Skill discovery and should include both what the
 
 Each Skill has exactly one description field. The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills. Your description must provide enough detail for Claude to know when to select this Skill, while the rest of SKILL.md provides the implementation details.
 
+The description is not a summary for humans, it's a trigger condition for Claude. At session start, Claude builds a listing of every available Skill and its description. For each request, Claude scans that listing to decide "is there a Skill for this request?" — so write the description as the answer to that question, not as documentation. If users refer to the task by a specific word (for example, "babysit" for a PR-monitoring workflow), include that literal word in the description to improve the chance Claude selects the Skill on the first try.
+
 Effective examples:
 
 **PDF Processing skill:**
@@ -568,6 +570,8 @@ This shows the validation loop pattern using reference documents instead of scri
 
 The validation loop catches errors early.
 
+Prefer verification methods that produce evidence outside the model's own claims: see [Create verifiable intermediate outputs](#create-verifiable-intermediate-outputs) below for the plan-validate-execute pattern, and consider having Claude record a video or screenshots of the behavior it's testing, so the recording — not Claude's description of it — is what gets reviewed.
+
 ## Content guidelines
 
 ### Avoid time-sensitive information
@@ -601,6 +605,23 @@ This endpoint is no longer supported.
 ```
 
 The old patterns section provides historical context without cluttering the main content.
+
+### Write a Gotchas section from real failures
+
+The highest-signal content in a Skill is usually a Gotchas section: a list of the specific mistakes Claude actually made while using it. Don't write these speculatively — capture them after observing a real failure, then add exactly the correction Claude needed.
+
+**Good example: Specific and actionable:**
+
+```markdown
+## Gotchas
+
+- The `subscriptions` table is append-only. The row you want is the one
+  with the highest `version`, not the most recent `created_at`.
+- This field is called `@request_id` in the API gateway and `trace_id`
+  in the billing service. They're the same value.
+```
+
+Each entry names the exact trap and the fix, not a general warning to "be careful."
 
 ### Use consistent terminology
 
@@ -752,11 +773,35 @@ Guide Claude through decision points:
 If workflows become large or complicated with many steps, consider pushing them into separate files and tell Claude to read the appropriate file based on the task at hand.
 </Tip>
 
+### Config-driven setup pattern
+
+Some Skills need context that's specific to a user or a workspace, like a database name, a project ID, or a preferred output directory, before they can run. Store that setup information in a `config.json` file in the Skill directory instead of asking for it inline every time.
+
+```text
+standup-post/
+├── SKILL.md
+└── config.json    # { "channel": "#eng-standup", "timezone": "America/Los_Angeles" }
+```
+
+Have Claude check for `config.json` first. If it's missing or incomplete, Claude asks the user for the missing values and writes them back, so the Skill only needs setup once per environment.
+
+This assumes the Skill directory itself is writable and persists between runs, which holds for a Skill checked into a project or installed to a user's local Claude Code config. It does not hold for every distribution channel: a Skill installed from a plugin marketplace can have its directory replaced on update, and Claude API integrations have no filesystem guarantee across requests. For those cases, write setup and state to storage the host provides instead (for example `${CLAUDE_PLUGIN_DATA}` for a Claude Code plugin), not to the Skill's own directory.
+
+### Stateful skills
+
+A Skill can carry its own memory by writing to a file it owns: an append-only text log, a JSON file, or a SQLite database for anything more structured. On the next run, Claude reads that file to see what changed since last time, instead of asking the user to repeat context. The same persistence caveat as above applies: pick a location that actually survives between runs on your distribution channel.
+
+**Example:** A daily standup-posting Skill keeps `standups.log` with every post it has written. Each run, Claude reads the log first and can tell what changed since yesterday's entry.
+
 ## Evaluation and iteration
+
+### Measure usage, not intent
+
+Don't assume a Skill is working just because you wrote it well. Where the host supports it, log when Skills actually get triggered, for example with a Claude Code `PreToolUse` hook that records which Skill fired and with what arguments, so you can spot Skills that trigger too often on unrelated requests (the description is too broad) and cross-check the low-usage ones against the description's trigger words (the description may be too narrow).
 
 ### Build evaluations first
 
-**Create evaluations BEFORE writing extensive documentation.** This ensures your Skill solves real problems rather than documenting imagined ones.
+**Create evaluations BEFORE writing extensive documentation.** This ensures your Skill solves real problems rather than documenting imagined ones. The best Skills usually start this way: a few lines covering a single gotcha, not a comprehensive spec written up front, then a rule or example added each time Claude hits a new edge case in real use.
 
 **Evaluation-driven development:**
 
@@ -1021,6 +1066,8 @@ Claude's vision capabilities help understand layouts and structures.
 
 ### Create verifiable intermediate outputs
 
+In Anthropic's internal experience, verification Skills that check what actually happened — rather than trusting Claude's summary of what it did — have had the most measurable impact on Claude's output quality. Two techniques for this: having Claude record a video or screenshots of the behavior it's testing, so the recording is what gets reviewed instead of Claude's description of it; and enforcing programmatic assertions on state at each step (file exists, exit code is 0, response schema matches) instead of asking Claude to eyeball the result.
+
 When Claude performs complex, open-ended tasks, it can make mistakes. The "plan-validate-execute" pattern catches errors early by having Claude first create a plan in a structured format, then validate that plan with a script before executing it.
 
 **Example:** Imagine asking Claude to update 50 form fields in a PDF based on a spreadsheet. Without validation, Claude might reference non-existent fields, create conflicting values, miss required fields, or apply updates incorrectly.
@@ -1160,6 +1207,8 @@ Before sharing a Skill, verify:
 - [ ] File references are one level deep
 - [ ] Progressive disclosure used appropriately
 - [ ] Workflows have clear steps
+- [ ] Description written as a trigger condition, not a summary
+- [ ] Gotchas section captures real failures observed, not speculative warnings
 
 ### Code and scripts
 
@@ -1178,6 +1227,7 @@ Before sharing a Skill, verify:
 - [ ] Tested with Haiku, Sonnet, and Opus
 - [ ] Tested with real usage scenarios
 - [ ] Team feedback incorporated (if applicable)
+- [ ] Usage tracked (e.g. via a `PreToolUse` hook) so under-triggering or over-triggering can be caught after release
 
 ## Next steps
 
