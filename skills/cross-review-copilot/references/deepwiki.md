@@ -1,14 +1,16 @@
-# Version Fact-Checking via deepwiki
+# deepwiki によるバージョン事実確認
 
 レビュアーの学習データより新しいバージョンを使っている場合、そのバージョンでの推奨実装をレビュアーは知らない。知らないことに気づかないまま「問題なし」と判断するか、古いバージョンの知識で誤った指摘を出す。deepwiki MCP は GitHub リポジトリのソースとドキュメントを直接読んで答えるため、この穴を埋められる。
 
+**この手順はレビュアー自身が、レビュー範囲を読んだあとで実行する。** host がブリーフィング作成時に代わりに調べて渡すことはしない。どのライブラリが version-sensitive かは、変更ファイルを実際に読んだレビュアーの方が正確に判断できる。
+
 deepwiki MCP が使えないときは、この手順を丸ごとスキップする。スキップしたことはレポートに 1 行書く（黙って落とすと、確認したのかしていないのか分からなくなる）。
 
-## 対象
+## いつ使うか
 
-**ライブラリだけでなく、言語・ランタイム・フレームワークも対象にする。** 破壊的変更や推奨の変更は言語側でも起きる。
+**変更ファイルが実際に import / require しているもの**と、**その言語・ランタイム本体**が対象。全依存を引くと時間もトークンも消費する。**合計 5 件を上限**とし、超える場合は変更ファイルでの使用箇所が多い順に選ぶ。
 
-対象は**変更ファイルが実際に import / require しているもの**と、**その言語・ランタイム本体**に限る。全依存を引くと時間もトークンも消費する。**合計 5 件を上限**とし、超える場合は変更ファイルでの使用箇所が多い順に選ぶ。
+無制限に調査しない。version-sensitive な指摘（非推奨 API の使用、EOL したランタイムへの依存など）を出す・出された指摘を裏取りするときだけ使う。
 
 ## 手順 1: バージョンを特定する
 
@@ -86,7 +88,7 @@ npm view <pkg> repository.url        # → git+https://github.com/honojs/hono.gi
 curl -s https://pypi.org/pypi/<pkg>/json   # info.project_urls を読む
 
 # crates.io
-curl -s https://crates.io/api/v1/crates/<pkg> -H 'User-Agent: team-review'   # crate.repository
+curl -s https://crates.io/api/v1/crates/<pkg> -H 'User-Agent: cross-review'   # crate.repository
 
 # Go
 # go.mod のモジュールパスが github.com/<owner>/<repo> ならそのまま使える
@@ -118,7 +120,7 @@ Answer for v<version> specifically, not for the latest release.
 
 ### 用途別テンプレート
 
-**(a) 事前確認（ブリーフィング作成時）**
+**(a) レビュアー自身の初回調査**（レビュー範囲を読んだ直後、指摘を出す前）
 
 ```
 In <name> v<version>, what are the recommended APIs and patterns for <スコープで使っている機能>?
@@ -126,30 +128,32 @@ Which APIs were recommended in earlier versions but are deprecated or discourage
 Answer for v<version> specifically, not for the latest release.
 ```
 
-**(b) 指摘の裏取り（議論時）**
+**(b) 指摘の裏取り**（議論で version claim が争点になったとき）
 
 ```
 In <name> v<version>, is `<API名>` deprecated or discouraged?
 If so, what replaced it and in which version did that change?
+Does `<API名>` still work correctly in v<version>, or has it already been removed?
+Is a specific future version already announced for its removal? If so, which one?
 If it is not deprecated in v<version>, say so explicitly.
 Answer for v<version> specifically, not for the latest release.
 ```
 
-「非推奨でないなら、そうと明言せよ」を入れるのは、質問の形に引きずられて非推奨だと答えてしまうのを防ぐため。
+「非推奨でないなら、そうと明言せよ」を入れるのは、質問の形に引きずられて非推奨だと答えてしまうのを防ぐため。「現バージョンでまだ動作するか」「削除予定バージョンが明示されているか」を聞くのは、Severity を「deprecated」というラベルではなくこの確認結果から決めるため（`references/code.md` の Severity 基準を参照）。
 
 ## 手順 4: 結果の扱い
 
-**ブリーフィング作成時**: deepwiki の回答は上流ドキュメント由来の事実として、出典を明記してブリーフィングに載せる。
+**指摘として提出するとき**: deepwiki の回答を出典として引用する。Severity はラベルではなく、回答が示す実害（現バージョンで動作するか、削除予定バージョンが決まっているか）から `references/code.md` / `references/design.md` の基準に当てはめる。
 
 ```
 【deepwiki: honojs/hono v4.13.2 について】
 <回答>
 ```
 
-判断（「だからこの実装は正しい」）は書かない。事実だけ渡す。
+**議論で争点になったとき**: バージョン整合性に関する指摘は、deepwiki の回答を証拠として提出させる。
 
-**議論時**: バージョン整合性に関する指摘は、deepwiki の回答を証拠として提出させる。
-
-- 裏が取れた → 指摘を維持し、レポートに deepwiki の該当箇所を引用する
+- 裏が取れた → 指摘を維持し、レポートに deepwiki の該当箇所を引用する。Severity は上記の基準で当てはめ直す
 - 否定された → 指摘を取り下げる
-- deepwiki が答えられなかった、または対象を解決できなかった → **未検証**として扱い、Severity を 1 段下げる。レビュアーの記憶だけを根拠に非推奨と断定しない
+- deepwiki が答えられなかった、または対象を解決できなかった → **未検証**として扱い、Severity を 1 段下げる。記憶だけを根拠に非推奨と断定しない
+
+この確認は議論のラウンド数に数えない。

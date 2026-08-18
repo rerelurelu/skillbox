@@ -1,6 +1,6 @@
-# Backend Domain Criteria
+# バックエンド観点
 
-Additive criteria for scope containing backend/server code (APIs, business logic, data access). Use alongside the type criteria (`references/<type>.md`), not in place of them.
+バックエンド/サーバーコード（API、ビジネスロジック、データアクセス）を含む範囲に追加で使う観点。`references/<type>.md` の観点を置き換えるのではなく、それに追加する。変更内容に関係する項目を優先し、無関係な項目まで機械的に全件確認する必要はない。
 
 ## 観点
 
@@ -13,13 +13,13 @@ Additive criteria for scope containing backend/server code (APIs, business logic
 
 ## Severityの当てはめ
 
-type 側の Severity 表に当てはめる。判断が割れる観点は以下に寄せる。
+以下は典型例であり、存在だけで Severity を決めない。実際に到達可能な経路、影響範囲、代替手段、利用環境を確認して type 側の基準へ当てはめる。
 
-| 観点 | 当てはめ先 |
-|------|-----------|
-| 認可漏れ、入力検証の欠如による不正操作 | CRITICAL（セキュリティ脆弱性） |
-| トランザクション境界の誤りによるデータ不整合 | CRITICAL（データ損失） |
-| 冪等性の欠如（二重登録・二重課金） | CRITICAL（データ損失） |
-| レースコンディション、ロック順序の不一致 | HIGH |
-| リソースリーク | HIGH（稼働時間に比例して枯渇するため） |
-| N+1、インデックス不足、全件取得 | MEDIUM |
+| 観点 | 成立条件 | 当てはめ先 |
+|------|---------|-----------|
+| 認可・入力検証 | 認可確認が無く、権限を持たないユーザーが実際に他者のデータを読み書きできる経路が成立する。ハンドラ単体に見当たらなくても、上位 middleware・framework の認可ポリシーで担保されているなら対象外 | CRITICAL（セキュリティ脆弱性） |
+| トランザクション境界 | 実際に片方だけ成功しうる操作順序が存在し、それによってデータが不整合になる | CRITICAL（データ損失） |
+| 冪等性 | 同一リクエストの再送・リトライが実際に発生しうる経路で、二重登録・二重課金が成立する | CRITICAL（データ損失） |
+| 並行性 | レースコンディション、ロック順序の不一致が実際に到達可能な経路で成立する | HIGH |
+| リソース管理 | エラー経路でリソースが解放されず、稼働時間に比例して枯渇する | HIGH |
+| クエリ性能 | N+1、インデックス不足、全件取得 | MEDIUM |
