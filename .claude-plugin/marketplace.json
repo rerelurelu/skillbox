@@ -9,7 +9,7 @@
       "name": "relubox",
       "source": "./",
       "description": "Personal agent skills: review teams, cleanup passes, task decomposition, CI fixes, and a knowledge base workflow.",
-      "version": "1.10.0",
+      "version": "1.11.0",
       "author": {
         "name": "rerelurelu"
       },
