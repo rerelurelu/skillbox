@@ -1,6 +1,6 @@
-# Frontend Domain Criteria
+# フロントエンド観点
 
-Additive criteria for scope containing frontend code (UI components, client-side state, styling). Use alongside the type criteria (`references/<type>.md`), not in place of them.
+フロントエンドコード（UI コンポーネント、クライアント側の状態、スタイリング）を含む範囲に追加で使う観点。`references/<type>.md` の観点を置き換えるのではなく、それに追加する。変更内容に関係する項目を優先し、無関係な項目まで機械的に全件確認する必要はない。
 
 ## 観点
 
@@ -13,12 +13,12 @@ Additive criteria for scope containing frontend code (UI components, client-side
 
 ## Severityの当てはめ
 
-type 側の Severity 表に当てはめる。判断が割れる観点は以下に寄せる。
+以下は典型例であり、存在だけで Severity を決めない。実際に到達可能な経路、影響範囲、代替手段、利用環境を確認して type 側の基準へ当てはめる。
 
-| 観点 | 当てはめ先 |
-|------|-----------|
-| XSS/サニタイズの経路が存在する | CRITICAL（セキュリティ脆弱性） |
-| 状態の重複により表示とデータが食い違う | HIGH（重大なロジックエラー） |
-| キーボード操作で到達できない機能がある | HIGH（その機能が使えないため） |
-| 上記以外のアクセシビリティ | MEDIUM |
-| レンダリング性能、レスポンシブ | MEDIUM |
+| 観点 | 成立条件 | 当てはめ先 |
+|------|---------|-----------|
+| XSS/サニタイズ | 外部由来の値がサニタイザを通らずに `dangerouslySetInnerHTML`/`v-html`/`innerHTML` へ到達する経路が実在する | CRITICAL（セキュリティ脆弱性） |
+| 状態の重複 | 表示とデータが実際に食い違う経路が成立する（理論上の重複だけで表示に矛盾が出ないなら対象外） | HIGH（重大なロジックエラー） |
+| アクセシビリティ | キーボード操作だけでは主要機能に到達できず、代替経路も存在しない | HIGH |
+| アクセシビリティ | 上記以外（補助的な操作、軽微な読み上げ漏れなど） | MEDIUM |
+| レンダリング性能、レスポンシブ | 上記のいずれにも該当しない | MEDIUM |

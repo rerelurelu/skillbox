@@ -1,6 +1,6 @@
-# Infra Domain Criteria
+# インフラ観点
 
-Additive criteria for scope containing infrastructure code (IaC, CI/CD, container/orchestration config). Use alongside the type criteria (`references/<type>.md`), not in place of them.
+インフラコード（IaC、CI/CD、コンテナ/オーケストレーション設定）を含む範囲に追加で使う観点。`references/<type>.md` の観点を置き換えるのではなく、それに追加する。変更内容に関係する項目を優先し、無関係な項目まで機械的に全件確認する必要はない。
 
 ## 観点
 
@@ -14,13 +14,13 @@ Additive criteria for scope containing infrastructure code (IaC, CI/CD, containe
 
 ## Severityの当てはめ
 
-type 側の Severity 表に当てはめる。判断が割れる観点は以下に寄せる。
+以下は典型例であり、存在だけで Severity を決めない。実際に到達可能な経路、影響範囲、代替手段、利用環境を確認して type 側の基準へ当てはめる。
 
-| 観点 | 当てはめ先 |
-|------|-----------|
-| シークレットのハードコード、ログへの流出 | CRITICAL（セキュリティ脆弱性） |
-| `0.0.0.0/0` 開放、不要なポート公開 | CRITICAL（セキュリティ脆弱性） |
-| ロールバック手順のない破壊的変更 | CRITICAL（データ損失） |
-| ワイルドカード権限、過剰な権限付与 | HIGH |
-| 冪等でない適用（再実行で失敗する） | HIGH |
-| 可視性の欠落、バージョン未固定 | MEDIUM |
+| 観点 | 成立条件 | 当てはめ先 |
+|------|---------|-----------|
+| シークレット管理 | 認証情報・トークンがログやリポジトリに実際に露出する経路が成立する | CRITICAL（セキュリティ脆弱性） |
+| ネットワーク露出 | `0.0.0.0/0` から、本来外部公開する必要のない管理ポートや内部サービスへ第三者が現実に到達可能。public な ALB の 443 番のような意図した公開は対象外 | CRITICAL（セキュリティ脆弱性） |
+| ロールバック・影響範囲 | ロールバック手順が無く、失敗時に実際に取り返しがつかない破壊的変更 | CRITICAL（データ損失） |
+| 最小権限 | ワイルドカード権限・過剰な権限付与が、実際に使われていない権限を含む | HIGH |
+| 冪等性 | 再実行で実際に失敗する適用 | HIGH |
+| 可観測性、バージョン固定 | 上記のいずれにも該当しない | MEDIUM |
