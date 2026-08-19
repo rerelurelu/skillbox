@@ -29,6 +29,12 @@ license: "GPL-3.0"
 
 指摘をそのまま集約するだけで満足してはならない。会話が持っている設計文脈を使って、能動的に評価する。
 
+### このレビューが扱わないもの
+
+不要コード・YAGNI・過剰な実装や抽象化・「もっと単純にできる」という理由だけの指摘は扱わない。現在の実装・計画・設計が正しく機能し、具体的な correctness / security / data integrity / compatibility / 実行可能性の問題が成立しないなら、複雑さやコード量だけを理由に finding を作らない。
+
+複雑な構造が具体的な問題を引き起こしている場合は、「複雑であること」ではなく、その問題そのものを claim にする。Codex・`claude-reviewer`・`self-reviewer` のいずれかが simplicity のみを理由とする finding を返した場合も、Phase 5 のトリアージでこのスコープに当てはめ、最終結果には残さない。
+
 | 役割 | モデル | やること |
 |------|--------|----------|
 | **main agent**（Technical Review Lead） | ユーザーの設定のまま | 範囲の決定 · ブリーフィング · spawn · Codex の実行 · 議論 · 要否判断 · 編集 · 報告 |
@@ -211,6 +217,11 @@ SendMessage     → agent_id
 LOW・nitpick は報告しない。Critical な問題と、対応する価値があり修正が
 容易な問題だけを報告する。
 
+self-review スキルが不要コード・YAGNI・過剰な実装や抽象化・simplification
+のみを理由とする指摘を生成した場合、それらはこのレビューの finding として
+報告しない。具体的な correctness / security / data integrity / compatibility
+等の問題が成立する場合だけ報告する。
+
 PR レビューでは diff だけでは周辺実装・呼び出し側・変更されていない関数を
 確認できない。evidence を十分に確認できない指摘は、通常の指摘として断定
 せず「未確認の可能性」として別に報告する。確認に追加のファイル全文が要る
@@ -276,9 +287,10 @@ bash <このスキルのベースディレクトリ>/scripts/run-codex-review.sh
 - 判定基準ファイルと `references/deepwiki.md` の絶対パス
 - 下の指摘の書式
 - レビュアーに渡したのと同じロックファイルのルール（Codex は MCP を持たないので、deepwiki の部分を除いたロックファイルの部分だけ）
-- 以下の 2 文をそのまま
+- 以下の 3 文をそのまま
   1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
   2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
+  3. "Do not report YAGNI, unnecessary abstraction, unnecessary generalization, or \"this could be simpler\" findings unless they cause a concrete correctness, security, data-integrity, compatibility, or execution problem."
 
 ### 2. 指摘の書式
 
@@ -359,15 +371,14 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 
 編集が承認されている場合、トリアージ後に残った修正候補を適用し、プロジェクトに型チェッカー・リンター・テストがあれば 1 件ずつ確認する。承認されていない場合は何も変更せず、下の「修正を提案する指摘」の節を使う。
 
-**修正候補そのものにも YAGNI を適用する。** レビュー対象だけでなく、Codex・`claude-reviewer`・`self-reviewer` が出す修正提案自体にも、要件を超えた抽象化・汎用化が混ざる。適用する前に確認する。
+### 修正スコープを守る
 
-- 提案された修正が、現在の要件を満たすために本当に必要か
-- 「将来必要になるかもしれない」「より綺麗になる」「より拡張しやすくなる」だけを理由にした抽象化・汎用化・リファクタリング・スコープ拡大は採用しない
-- 問題を解決する最小限の修正を優先する。指摘の claim/evidence が指す箇所だけを直し、ついでの整理はしない
-- 既存のプロジェクト規約や設計上必要な構造は、単純化のために壊さない
-- 実際の不具合・セキュリティ問題・データ整合性問題への必要な対応まで、YAGNI を理由に却下しない
+目的は最も単純なコードにすることではない。レビュー依頼で承認されていない変更まで main agent が勝手に行わないことである。
 
-採用するのは、現在の要件・実際に確認された問題・既存の設計制約のいずれかに具体的な根拠がある修正だけである。提案の一部だけが最小修正で残りが不要な拡張なら、必要な部分だけを取り出して適用する。
+- レビューで確認された claim/evidence の修正だけを行う。指摘が指す箇所だけを直し、ついでの整理はしない
+- 修正対象外のコードを変更しない
+- 承認されたレビュー scope を越えて変更しない
+- 新しい dependency・schema・公開 API の変更が必要な修正は自動修正せず「判断が必要」に回す
 
 ### 2. 報告
 

@@ -29,6 +29,12 @@ license: "GPL-3.0"
 
 指摘をそのまま集約するだけで満足してはならない。会話が持っている設計文脈を使って、能動的に評価する。
 
+### このレビューが扱わないもの
+
+不要コード・YAGNI・過剰な実装や抽象化・「もっと単純にできる」という理由だけの指摘は扱わない。現在の実装・計画・設計が正しく機能し、具体的な correctness / security / data integrity / compatibility / 実行可能性の問題が成立しないなら、複雑さやコード量だけを理由に finding を作らない。
+
+複雑な構造が具体的な問題を引き起こしている場合は、「複雑であること」ではなく、その問題そのものを claim にする。Codex・`copilot-reviewer` のいずれかが simplicity のみを理由とする finding を返した場合も、Phase 5 のトリアージでこのスコープに当てはめ、最終結果には残さない。
+
 | 役割 | 実体 | やること |
 |------|------|----------|
 | **host**（Technical Review Lead） | ユーザーの Copilot CLI セッション | 範囲の決定 · ブリーフィング · Codex の実行 · 議論 · 要否判断 · 編集 · 報告 |
@@ -154,6 +160,10 @@ gh pr checkout は使わない。PR は gh pr view / gh pr diff で見る。
 
 すべての指摘を、下の書式の 5 項目すべてを省略せずに最終メッセージへ書く。
 要約しない。このメッセージだけが自分の作業のうち残るものである。
+
+不要コード・YAGNI・過剰な実装や抽象化・simplification のみを理由とする
+指摘は報告しない。具体的な correctness / security / data integrity /
+compatibility 等の問題が成立する場合だけ報告する。
 ```
 
 チェックアウトに関する行が実際に効く部分である。「ファイルを変更するな」は中身の書き換えの話に読めるため、`gh pr checkout <n>` や `git checkout <branch>` を止められない。これらのコマンドは追跡ファイルを置き換え、ユーザーの未コミット作業、つまりレビュー対象そのものを消す。
@@ -191,9 +201,10 @@ bash <このスキルのベースディレクトリ>/scripts/run-codex-review.sh
 - 判定基準ファイルと `references/deepwiki.md` の絶対パス
 - 下の指摘の書式
 - レビュアーに渡したのと同じロックファイルのルール（Codex は MCP を持たないので、deepwiki の部分を除いたロックファイルの部分だけ）
-- 以下の 2 文をそのまま
+- 以下の 3 文をそのまま
   1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
   2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
+  3. "Do not report YAGNI, unnecessary abstraction, unnecessary generalization, or \"this could be simpler\" findings unless they cause a concrete correctness, security, data-integrity, compatibility, or execution problem."
 
 同じ規則が `copilot-reviewer` の再委譲にも当たる。新しいサブエージェントには、ブリーフィング、レビュー範囲、判定基準のパス、そのレビュアー自身の以前の指摘、そして答えるべき指摘と反論を渡す。
 
