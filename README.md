@@ -28,9 +28,9 @@ Note that Copilot CLI does not read `~/.claude/plugins/`, so a plugin install do
 Per-skill installs, and the only route for agents other than Claude Code. Install all skills at user scope for Claude Code:
 
 ```bash
-gh skill install rerelurelu/skillbox deslop --agent claude-code --scope user
+gh skill install rerelurelu/skillbox deslop-comments --agent claude-code --scope user
 gh skill install rerelurelu/skillbox cross-review --agent claude-code --scope user
-gh skill install rerelurelu/skillbox clean-code --agent claude-code --scope user
+gh skill install rerelurelu/skillbox final-cleanup --agent claude-code --scope user
 gh skill install rerelurelu/skillbox decomposition --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-implementation --agent claude-code --scope user
 gh skill install rerelurelu/skillbox dig --agent claude-code --scope user
@@ -40,6 +40,7 @@ gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
 gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
 gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --scope user
+gh skill install rerelurelu/skillbox lean-review --agent claude-code --scope user
 ```
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
@@ -54,10 +55,10 @@ gh skill install rerelurelu/skillbox cross-review-copilot --agent github-copilot
 
 | Skill | Purpose |
 |-------|---------|
-| [deslop](skills/deslop/SKILL.md) | Removes AI-generated slop from uncommitted changes |
-| [cross-review](skills/cross-review/SKILL.md) | The main agent, acting as Technical Review Lead, runs Codex CLI itself and argues its findings against a tool-restricted, resumable Claude reviewer subagent, applying YAGNI to both the reviewed code and the reviewers' own fix proposals before weighing survivors against the implementation plan, fixing, and reporting. Reviews uncommitted changes or a pull request by number (needs Claude Code 2.1.206+ and the `codex` CLI) |
+| [deslop-comments](skills/deslop-comments/SKILL.md) | Removes AI-generated slop from Japanese code comments only (comment text and whitespace, nothing else) |
+| [cross-review](skills/cross-review/SKILL.md) | The main agent, acting as Technical Review Lead, runs Codex CLI itself and argues its findings against a tool-restricted, resumable Claude reviewer subagent, focusing on correctness, security, data integrity, and compatibility (not simplicity/YAGNI) before weighing survivors against the implementation plan, fixing, and reporting. Reviews uncommitted changes or a pull request by number (needs Claude Code 2.1.206+ and the `codex` CLI) |
 | [cross-review-copilot](skills/cross-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: the host session, acting as Technical Review Lead, runs Codex CLI and argues its findings against a Copilot subagent reviewer (needs the `codex` CLI) |
-| [clean-code](skills/clean-code/SKILL.md) | Post-implementation polish: simplify → deslop → dead-code/comment audit |
+| [final-cleanup](skills/final-cleanup/SKILL.md) | Final polish after implementation, cross-review, and lean-review are done: dead-code removal → comment/implementation consistency → `deslop-comments` → project verification (lint/typecheck/test) |
 | [decomposition](skills/decomposition/SKILL.md) | Decomposes complex tasks into atomic, executable todos |
 | [delegating-implementation](skills/delegating-implementation/SKILL.md) | Hands a reviewed implementation plan to a sonnet subagent, keeping the main agent's context free of the read/edit/test loop, then runs a plan-compliance check on the result |
 | [dig](skills/dig/SKILL.md) | Deep exploratory interview to surface hidden assumptions and risks in plans |
@@ -67,6 +68,7 @@ gh skill install rerelurelu/skillbox cross-review-copilot --agent github-copilot
 | [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
 | [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
 | [delegating-via-herdr](skills/delegating-via-herdr/SKILL.md) | Delegates a task to another coding agent in a visible herdr pane, waiting for completion in the background |
+| [lean-review](skills/lean-review/SKILL.md) | Memorable adapter that runs the `ponytail-review` skill for a simplicity/YAGNI/over-engineering review of finished code, with no simplicity criteria of its own (requires `ponytail-review` to be installed separately) |
 
 ## Updating
 
