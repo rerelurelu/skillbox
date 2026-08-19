@@ -31,11 +31,7 @@ Per-skill installs, and the only route for agents other than Claude Code. Instal
 gh skill install rerelurelu/skillbox deslop-comments --agent claude-code --scope user
 gh skill install rerelurelu/skillbox cross-review --agent claude-code --scope user
 gh skill install rerelurelu/skillbox final-cleanup --agent claude-code --scope user
-gh skill install rerelurelu/skillbox decomposition --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-implementation --agent claude-code --scope user
-gh skill install rerelurelu/skillbox dig --agent claude-code --scope user
-gh skill install rerelurelu/skillbox fix-ci --agent claude-code --scope user
-gh skill install rerelurelu/skillbox creating-skills --agent claude-code --scope user
 gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
 gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
 gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
@@ -59,11 +55,7 @@ gh skill install rerelurelu/skillbox cross-review-copilot --agent github-copilot
 | [cross-review](skills/cross-review/SKILL.md) | The main agent, acting as Technical Review Lead, runs Codex CLI itself and argues its findings against a tool-restricted, resumable Claude reviewer subagent, focusing on correctness, security, data integrity, and compatibility (not simplicity/YAGNI) before weighing survivors against the implementation plan, fixing, and reporting. Reviews uncommitted changes or a pull request by number (needs Claude Code 2.1.206+ and the `codex` CLI) |
 | [cross-review-copilot](skills/cross-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: the host session, acting as Technical Review Lead, runs Codex CLI and argues its findings against a Copilot subagent reviewer (needs the `codex` CLI) |
 | [final-cleanup](skills/final-cleanup/SKILL.md) | Final polish after implementation, cross-review, and lean-review are done: dead-code removal → comment/implementation consistency → `deslop-comments` → project verification (lint/typecheck/test) |
-| [decomposition](skills/decomposition/SKILL.md) | Decomposes complex tasks into atomic, executable todos |
 | [delegating-implementation](skills/delegating-implementation/SKILL.md) | Hands a reviewed implementation plan to a sonnet subagent, keeping the main agent's context free of the read/edit/test loop, then runs a plan-compliance check on the result |
-| [dig](skills/dig/SKILL.md) | Deep exploratory interview to surface hidden assumptions and risks in plans |
-| [fix-ci](skills/fix-ci/SKILL.md) | Automatically diagnoses and fixes CI failures in the current PR |
-| [creating-skills](skills/creating-skills/SKILL.md) | Authors new Agent Skills following the agentskills.io specification |
 | [memo](skills/memo/SKILL.md) | Records tech knowledge, design decisions, domain knowledge, and coding tendencies to a personal knowledge base (`~/dev/knowledge`, Obsidian vault) |
 | [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
 | [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
@@ -94,7 +86,7 @@ gh skill install /path/to/skillbox cross-review --from-local --agent claude-code
 
 ## Authoring New Skills
 
-When authoring a new skill in this repo, the [`creating-skills`](skills/creating-skills/SKILL.md) skill auto-triggers on prompts like "create a skill" or "add a new skill" and walks through the full process. Repository-level conventions are documented in [`AGENTS.md`](AGENTS.md), and the full Anthropic authoring guide is mirrored at [`best-practices/create-skill.md`](best-practices/create-skill.md).
+When authoring a new skill in this repo, follow the conventions documented in [`AGENTS.md`](AGENTS.md); the full Anthropic authoring guide is mirrored at [`best-practices/create-skill.md`](best-practices/create-skill.md).
 
 ## License
 

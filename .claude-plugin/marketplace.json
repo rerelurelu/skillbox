@@ -8,8 +8,8 @@
     {
       "name": "relubox",
       "source": "./",
-      "description": "Personal agent skills: review teams, cleanup passes, task decomposition, CI fixes, and a knowledge base workflow.",
-      "version": "1.12.0",
+      "description": "Personal agent skills: review teams, cleanup passes, and a knowledge base workflow.",
+      "version": "1.13.0",
       "author": {
         "name": "rerelurelu"
       },
@@ -17,14 +17,10 @@
       "license": "GPL-3.0",
       "strict": false,
       "skills": [
-        "./skills/creating-skills",
-        "./skills/decomposition",
         "./skills/delegating-implementation",
         "./skills/delegating-via-herdr",
         "./skills/deslop-comments",
-        "./skills/dig",
         "./skills/final-cleanup",
-        "./skills/fix-ci",
         "./skills/memo",
         "./skills/recall",
         "./skills/retro",

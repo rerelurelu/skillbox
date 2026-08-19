@@ -17,7 +17,7 @@ skillbox/
 
 ## Skill Authoring Rules
 
-When creating or editing a skill in this repo, follow these rules. For deeper guidance, invoke the `creating-skills` skill or read `best-practices/create-skill.md`.
+When creating or editing a skill in this repo, follow these rules. For deeper guidance, read `best-practices/create-skill.md`.
 
 ### Required frontmatter
 
