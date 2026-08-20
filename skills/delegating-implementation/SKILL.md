@@ -2,7 +2,7 @@
 name: delegating-implementation
 description: |
   設計・実装計画は main agent（opus 想定）が持ったまま、承認済みの実装計画に沿った実装作業だけを sonnet の subagent に委譲する。実装計画を自己完結したドキュメントに圧縮して渡し、実装結果レポート（変更ファイル・計画項目との対応・逸脱・判断・実行したテスト・未解決事項）を受け取ったあと、main agent が計画との整合だけを確認する Plan Compliance Review を行う。
-  Triggers on: "実装して", "この計画で実装して", "sonnetに実装させて", "plan通りに実装", "implement this plan", "/delegating-implementation"
+  Triggers on: "実装して", "実装おねがい", "実装お願い", "修正お願い", "反映お願い", "この計画で実装して", "sonnetに実装させて", "plan通りに実装", "implement this plan", "/delegating-implementation"
   Use when a reviewed implementation plan already exists (from Plan Mode or the conversation) and the remaining work is a substantial multi-file implementation with its own read/edit/test loop — not a one- or two-line edit.
 version: "1.0.0"
 user-invocable: true
