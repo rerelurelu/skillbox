@@ -92,6 +92,20 @@ in exactly this format:
 
 起動したら、結果を待つ間に自分で実装を始めない。subagent が独立したコンテキストで作業している間、そのメリットを享受できるのは main agent が手を出さないときだけである。
 
+ターンを終える前に、ユーザーへ 1 行で報告する。`Agent` ツールはバックグラウンドで動き、完了通知が届くまで main agent は何も出力しない。報告が無いと、正常な待機と異常な停止をユーザーが区別できない。
+
+```
+sonnet の subagent に実装を委譲した。完了したら結果を報告する。
+```
+
+## subagent が戻ってこないとき
+
+subagent の作業が終わっているのに完了通知が親セッションに届かず、main agent が再開しないことがある。この場合、subagent は最終レポートを出力し終えているため、次の順で回収する。
+
+1. `TaskOutput` に subagent の ID を渡して出力を読む。Implementation Result が揃っていれば、そのまま Phase 2 へ進む。
+2. 出力が途中で終わっているなら、`SendMessage` で subagent に現在の状況を報告させる。permission の拒否でツール呼び出しが止まっている場合は、ここでその理由が分かる。
+3. 応答が無ければ `TaskStop` で停止し、`git status` と `git diff` でどこまで変更されたかを確認してから、残りの作業を新しい subagent に渡す。
+
 ## Phase 2: Plan Compliance Review
 
 subagent から結果が届いたら、**コードベースを再調査しない。** 実装を Sonnet に逃がした意味は、Read / Edit / テストのループを main agent のコンテキストに積まないことにある。全変更ファイルを読み直すと、その意味が失われる。
