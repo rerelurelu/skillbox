@@ -4,7 +4,7 @@ description: |
   コード、実装計画、設計、pull request を Claude と Codex で独立レビューし、指摘を相互検証して最終判断する。`codex` CLI が必要。GitHub Copilot CLI 環境では cross-review-copilot を使う。
   Triggers on: "review", "code review", "review this", "レビュー", "レビューして", "/cross-review"
   Use when: reviewing code, implementation plans, or architecture/design decisions.
-version: "5.0.0"
+version: "7.0.0"
 user-invocable: true
 argument-hint: "[scope]"
 license: "GPL-3.0"
@@ -12,63 +12,44 @@ license: "GPL-3.0"
 
 # Cross Review
 
-2 つのモデルが同じレビュー範囲を独立に調べ、互いの指摘に反論する。main agent は片方（Codex）を自分の手で動かし、もう片方に主張を運ぶ。会話の文脈——要件、設計判断、承認済みの実装計画——を持っているのは main agent だけなので、指摘の要否を最終的に決めるのも main agent だけである。
+役割別のレビュアー（最大 5 人）が同じレビュー範囲を並列に、別々の観点で独立に調べる。レビュー対象は各レビュアーが、ローカルの Git スナップショットまたは指定された文書から自分で取得する。main agent は自分の手で Codex も動かし、レビュアー全員と Codex の指摘を集めて評価する。会話の文脈——要件、設計判断、承認済みの実装計画——を持っているのは main agent だけなので、指摘の要否を最終的に決めるのも main agent だけである。
 
-## 役割: Technical Review Lead
+## main agent の責務
 
-このスキルが起動している間、main agent は **Technical Review Lead** として振る舞う。単に指摘を仲介して回収するだけの存在ではない。
-
-責務は次のとおりである。
-
-- 独立したレビュアー（Codex と claude-reviewer subagent）を調整する
-- 指摘を要件・実装計画・承認済みの設計判断と突き合わせて評価する
-- 意図的な設計判断と矛盾する指摘には異議を唱える
-- レビュアー間の対立を仲裁する
-- どの指摘に対応が必要かを決める
-- 最終的なレビュー判断をまとめる
+**main agent はレビュアーの調査を代行せず、レビュー全体の調整・裁定・報告を担う。**
 
 指摘をそのまま集約するだけで満足してはならない。会話が持っている設計文脈を使って、能動的に評価する。
 
 ### このレビューが扱わないもの
 
-不要コード・YAGNI・過剰な実装や抽象化・「もっと単純にできる」という理由だけの指摘は扱わない。現在の実装・計画・設計が正しく機能し、具体的な correctness / security / data integrity / compatibility / 実行可能性の問題が成立しないなら、複雑さやコード量だけを理由に finding を作らない。
+扱わないのは「今の挙動も変更時のコストも変わらない、書き方の好み」だけである。不要コード・YAGNI・過剰な実装や抽象化・「もっと単純に書ける」を理由とする指摘は引き続き扱わない（`lean-review` スキルの担当範囲である）。
 
-複雑な構造が具体的な問題を引き起こしている場合は、「複雑であること」ではなく、その問題そのものを claim にする。Codex・`claude-reviewer`・`self-reviewer` のいずれかが simplicity のみを理由とする finding を返した場合も、Phase 5 のトリアージでこのスコープに当てはめ、最終結果には残さない。
+**責務の配置・依存の向き・重複実装・保守運用上の問題は、このレビューの対象に含める。** ただし、変更時・運用時・障害時に成立する具体的な誤りを evidence に書けるものに限る。「なんとなく汚い」「将来困るかもしれない」で終わる指摘は対象外である。
+
+線引きは 1 文で書ける。`lean-review` が扱うのは消せるコードであり、`cross-review` が扱うのは置き場所が違うコードである。
+
+いずれかのレビュアーまたは Codex が simplicity のみを理由とする finding を返した場合、Phase 3 のトリアージでこのスコープに当てはめ、最終結果には残さない。
 
 | 役割 | モデル | やること |
 |------|--------|----------|
-| **main agent**（Technical Review Lead） | ユーザーの設定のまま | 範囲の決定 · ブリーフィング · spawn · Codex の実行 · 議論 · 要否判断 · 編集 · 報告 |
-| `claude-reviewer`（subagent） | `opus` | 範囲を自分で読む · 指摘を出す · 反論に答える |
-| `self-reviewer`（subagent） | `opus` | 同上（`self-review` スキル経由）。未インストール、または安全に制限できないなら不在 |
+| **main agent** | ユーザーの設定のまま | 判定 · レビュアーへの委譲 · Codex の実行 · トリアージ · 編集 · 報告 |
+| `review-implementation`（subagent） | `opus` | 境界値・異常系・並行性・状態管理・バージョン整合性・変更の波及を確認する |
+| `review-security`（subagent） | `opus` | 信頼できない入力の流れ・認証認可の分離・機密情報の扱い・安全でない依存を確認する |
+| `review-architecture`（subagent） | `opus` | 責務の配置・依存の向き・重複実装・変更の集中点・既存パターンとの整合を確認する |
+| `review-maintainability`（subagent） | `opus` | 可観測性・障害時の挙動・テスタビリティ・dead code・設定と環境差を確認する |
+| `review-plan-alignment`（subagent） | `sonnet` | Code レビューで、レビュー対象とは別に比較対象の実装計画が渡された場合にだけ起動。計画との整合を確認する |
 
-**レビュアーは自分でコードを読む。** 指摘の根拠を自分のコンテキストに持っているので、反論されたときにファイルに戻って答えられる。読む作業をさらに別の subagent へ委譲してはならない。他人の要約を運んでいるだけのレビュアーは、自分の指摘を擁護も撤回もできない。
-
-**レビュアーは通常の subagent であり、`SendMessage` で resume する。** `Agent` ツールで spawn した subagent は、完了して一度ターンを終えたあとも、spawn 時に返ってきた `agent_id` 宛に `SendMessage` を送れば元のコンテキストを保持したまま再開する（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` が前提。詳細は「前提条件」）。1 回答えて終わりの一方通行ではなく、指摘 → 反論 → 再確認という往復が同じ subagent の中で完結する。Agent Teams の teammate は使わない。
-
-**Codex だけは main agent 自身が運ぶ。** Codex は別プロセスで Claude のコンテキストを共有できないため、コマンドを実行して言葉を運ぶ担当が要る。main agent は要件・設計文脈をすでに持っているので、Codex の指摘をその場で評価しながら運べる。
+**Codex だけは main agent 自身が実行する。** Codex は `codex exec` という別プロセスであり、`Agent` ツールで委譲できないためである。
 
 レビュー対象のファイルを変更するのは main agent だけ。
-
-モデルは `opus` / `sonnet` という別名で書く。`claude-sonnet-5` のような固定名は書かない。別名はその系列の最新モデルに解決されるため、モデルが更新されてもこのファイルを書き換えずに済む。
 
 ## 前提条件
 
 ```bash
 command -v codex
-[ "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" = "1" ]
 ```
 
-**通常 subagent を `SendMessage` で resume するには `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` が必要。** Agent Teams の teammate 機能そのものは使わない。レビュアーは引き続き `Agent` ツールで spawn した通常の subagent であり、この flag は `SendMessage` によるレビュアーの resume を有効にするためだけに要求する。
-
-flag が有効でないと、spawn した subagent へ議論ラウンドの反論を送れず、指摘 → 反論 → 再確認の往復（Phase 5 の議論）が成立しない。**この場合は degraded mode へ勝手に切り替えない。** 相互反論が成立しないことをユーザーに伝え、反論なしで両者の指摘を並べるだけの単独レビューとして続けるか、ここで停止するかをユーザーに確認する。
-
 `codex` が無い場合はその旨を伝え、Claude 側のレビュアーだけで続けるかをユーザーに聞く。同じモデル系統だけでレビューするのは、このスキルが前提にしている相互チェックではないので、続行はユーザーの判断とする。
-
-## このスキルは何も残さない
-
-リポジトリには何も書き込まない。レビュー用のディレクトリも作らない。reviewer subagent は spawn プロンプトからブリーフィングを読み、指摘はメッセージで送る。
-
-唯一の例外が Codex の回答で、これは `codex exec` がテキストを返す手段がファイルだからである。Phase 5 で一時ディレクトリに書き、同じシェル呼び出しの終了時に削除する。
 
 ## ワークツリーの保護
 
@@ -83,44 +64,21 @@ git checkout               git restore
 gh pr checkout             rm / mv / 上書きする cp
 ```
 
-例外は Phase 6 step 1 だけで、そこで main agent がユーザーの承認した修正を適用する。
+例外は Phase 4 step 1 だけで、そこで main agent がユーザーの承認した修正を適用する。
 
-レビュアーはこのファイルを読まない。`claude-reviewer` は `agents/claude-reviewer.md` のツール allowlist により read-only を強制する。`self-reviewer` は Phase 3 で `self-review` の内容を確認し、安全な read-only allowlist を確定できた場合だけ spawn する。安全性を確認できない場合は参加させない。spawn する場合の同じ内容は Phase 4 のプロンプトに書いてある。書き換えるときは両方を確認する。
-
-変更済み・ステージ済み・未追跡のファイルを読み、レビューし、そのままの場所に置いておく。`/tmp` などの退避先にコピーしない。ブランチの切り替えが本当に必要なら、その操作を名指しでユーザーに確認する。
-
-pull request は main agent が `gh pr view` と `gh pr diff` で読み、そのテキストをレビュアーへ渡す（Phase 1・Phase 4）。`gh pr checkout` はしない。レビュアーには Bash が無いため、自分で `gh` を呼ぶことはできない。
+レビュアーは `Bash` を持つ。未コミットの変更や、fetch 済みの PR オブジェクトをローカルの Git コマンドで自分で読むために必要だからである。`Edit` はツール許可リストに無いため実行できない。`Write` は結果ファイルを書くために許可してあり、**出力先の 1 パスに限るという制限はツール権限ではなくプロンプトの指示である。** `Bash` 経由の破壊的コマンドも同じくツール権限では防げない。上の禁止コマンド一覧、`Write` の許可パス制限、`Bash` の許可コマンド一覧は、各 `agents/review-*.md` にも同じ内容が書いてある。書き換えるときは両方を確認する。レビュアーには lint・型チェックも実行させない。読み取り専用に見えても、キャッシュや `.tsbuildinfo` のような生成物をワークツリーに書くことがある。
 
 `references/…` のパスは、ハーネスが起動時に伝えるスキルのベースディレクトリ（`Base directory for this skill: …`）を基準に解決する。カレントディレクトリを基準にしてはならない。
 
-## Phase 1: レビュー範囲の決定
+## Phase 1: 判定
 
-**ユーザーが PR 番号を指定した場合**、範囲は PR である。
+main agent はこのフェーズで、レビュー種別・判定基準・レビュー対象の指定を決める。**レビュー対象のテキストは取得しない。**
 
-```bash
-gh pr view <n> --json number,title,body,baseRefName,headRefName,files
-gh pr diff <n>
-```
-
-どちらもワークツリーを変更しない。この `gh pr diff` の出力テキストが、このあとレビュアーへ渡す「レビュー範囲」そのものになる。**`gh pr checkout` は使わない。** ローカルのワークツリーが PR のブランチと一致している保証が無いため、レビュアーは `Read` で直接ファイルを読みに行かず、main agent が渡した diff テキストだけを根拠にする。
-
-**diff だけでは、周辺実装・呼び出し側・変更されていない関数の確認ができない。** レビュアーが確認できないまま指摘を断定しないというルールは Phase 4 で渡す（詳細は Phase 4）。ある指摘の evidence を確認するのに diff の外側が要ると分かったら、main agent は `git fetch origin pull/<n>/head`（安全。ワークツリーは変わらない）に続けて `git show <head-sha>:<path>` で該当ファイルの PR head 時点の全文を取得し、その指摘の議論ラウンドにだけ埋め込んで渡す。**PR 全体を事前に materialize する仕組みは作らない。** 確認が要ると分かった箇所だけ、都度取得する。
-
-**PR 番号の指定が無ければ**、未コミットの変更すべてを対象にする。**未追跡ファイルも含める。**
-
-```bash
-{ git diff HEAD --name-only; git ls-files --others --exclude-standard; } | sort -u
-```
-
-`git diff HEAD` だけでは未追跡ファイルが漏れる。新規追加したファイルが、そのファイル自身のレビューから外れる。両方のコマンドが 1 件も返さなければ、範囲が空であることを報告して停止する。この場合、レビュアーはワークツリーが範囲そのものなので、`Read`/`Grep`/`Glob` で直接読みに行く。
-
-## Phase 2: レビュー種別の決定
+### 1. レビュー種別の判定
 
 - **Plan** — 実装計画、タスクリスト、他のエージェントが実行する手順書
 - **Design** — アーキテクチャ文書、設計判断
 - **Code** — ソースコード（既定）
-
-`references/<type>.md` を読み、観点と Severity 基準を得る。
 
 **ドメイン**はパスと拡張子をヒントに見当をつける。絶対分類ではない。
 
@@ -128,141 +86,119 @@ gh pr diff <n>
 - **be** — `server/`、`api/`、`controllers/`、`models/`、`.sql`、ORM・マイグレーション
 - **infra** — `Dockerfile`、`docker-compose*`、`*.tf`、k8s マニフェスト、`.github/workflows/`
 
-Next.js の route handler や server component、edge で動くコード、CI 専用の TypeScript のように、パスと拡張子だけでは決まらないものもある。ヒントに当てはまらなくても変更内容から該当すると判断できるなら、そのドメインの `references/domains/<domain>.md` を読む。該当しそうな `references/domains/<domain>.md` を種別の観点に追加する形で使う。ドメイン内の項目も、変更内容に関係するものを優先し、無関係な項目まで機械的に全件確認しない。
+Next.js の route handler や server component、edge で動くコード、CI 専用の TypeScript のように、パスと拡張子だけでは決まらないものもある。ヒントに当てはまらなくても変更内容から該当すると判断できるなら、そのドメインの `references/domains/<domain>.md` を役割別レビュアーの観点に追加する情報として扱う。
 
-## Phase 3: ブリーフィング
+**レビュー対象の指定は 3 通りある。** どれに当たるかを最初に決める。
 
-レビュアーは会話の文脈を持っていない。1 ページに収まる短いブリーフィングを書き、各 reviewer subagent の spawn プロンプトと Codex へのリクエストの両方に入れる。ブリーフィング用のファイルは作らない。レビュアーはリポジトリを自分で読める（PR レビューでは渡された diff テキストを読む）ので、ブリーフィングには**それだけでは分からないことだけ**を書く。
+| 指定 | レビュー対象 |
+|------|------------|
+| ユーザーが PR 番号を渡した | その PR |
+| ユーザーが文書のパスを渡した、または会話に文書を貼った | その文書。Git の差分は見ない |
+| どれも無い | 未コミットの変更すべて |
 
-**書くもの:**
+種別判定のために、変更されたファイルのパスと拡張子だけ確認してよい。未コミットなら `git diff HEAD --name-only` と `git ls-files --others --exclude-standard`、PR なら `gh pr view <n> --json files`。**この結果をレビュアーへ渡さない。**
 
-| 項目 | リポジトリから得られない理由 |
-|------|------------------------------|
-| 何を変更したか（機械的に） | ワークツリーの変更のうちどれが今回のレビュー対象かは、どこにも書かれていない |
-| レビュー範囲の内と外（PR レビューでは `gh pr diff` の出力そのもの） | 同上 |
-| 意図的に未完成な箇所（**事実だけ。理由は書かない**） | 書きかけのコードと書き忘れたコードは見分けがつかない |
-| レビュー種別と、判定基準ファイルの絶対パス | Severity 基準の出どころが必要 |
-| 規約文書の場所（`docs/adr/`、`CONTRIBUTING.md`、`CLAUDE.md`、存在すれば `.claude/review.md` や `.claude/review/criteria.md` などの PJ 固有レビュー規約） | 探し回らせないため |
+対象が空なら、その旨を報告して停止する。
 
-**書かないもの（結論）:** 「この設計判断は妥当」「これはユーザーと合意済み」「これがこのプロジェクトの流儀」、および意図的な省略の理由。決着済みだと伝えられたレビュアーはそこを調べるのをやめる。意図的な省略が実際に問題を起こしているなら、それこそ必要な指摘である。未完成であることは書き、問題ないとは書かない。
+### 2. 判定基準ファイルの絶対パスの確定
 
-**採用済みの設計判断や実装計画の Constraints は、ブリーフィングとは別に main agent 自身の手元に残しておく。** レビュアーには見せないが、Phase 5 で指摘を評価するときに使う。
+`references/<type>.md`、`references/deepwiki.md`、該当すれば `references/domains/<domain>.md`。
 
-変更内容は機械的に書く。どのフェーズ・ファイル・関数が動いたかであって、なぜ良いかではない。書いたのは自分なので、正当化を渡されたレビュアーはそれを受け入れがちになる。
+### 3. PR スナップショットの固定と、実装計画の有無の確認
 
-**依存バージョンの要約と deepwiki の事前確認をここでしてはならない。** レビュアーはロックファイルを自分で読む。どのライブラリが重要かは、変更ファイルを読んだレビュアーの方が正確に判断できる。この作業はレビュアー自身が `references/deepwiki.md` の手順に従って行う（`claude-reviewer` は `agents/claude-reviewer.md` の恒常的ルールとして、`self-reviewer` は Phase 4 のプロンプトとして持っている）。main agent がここでやると、他の参加者が必要としない情報で自分のコンテキストを消費することにもなる。
-
-**`self-review` の有無**を両スコープで確認する。リポジトリルートからの絶対パスで判定する。
+PR レビューの場合、レビュアーを起動する前に PR の中身をローカルへ取り込む。**この 2 つのコマンドはワークツリー・HEAD・index を変更しない。**
 
 ```bash
-root="$(git rev-parse --show-toplevel)"
-test -f "$root/.claude/skills/self-review/SKILL.md" || test -f ~/.claude/skills/self-review/SKILL.md
+gh pr view <n> --json baseRefOid,headRefOid,baseRefName
+git fetch origin "pull/<n>/head" "<baseRefName>"
 ```
 
-ユーザースコープだけを見ると、プロジェクトスコープに入っているスキルを「未インストール」と誤判定し、レポートに「レビュアーが不在だった」と嘘を書くことになる。
+fetch したあと、両方の OID がローカルに存在することを確認する。
 
-**存在すれば、その `SKILL.md` を読み、安全に参加させられるか確認する。**
-
-- `Write` / `Edit` を必要とするステップが無いか
-- `git checkout` / `stash` / `reset` 等の破壊的操作を必要とするステップが無いか
-- `Read` / `Grep` / `Glob`（と、確認できれば対象言語の読み取り専用の lint・型チェック）だけでレビューが完結するか
-
-この 3 点をすべて確認できた場合だけ、`self-reviewer` を「安全に制限できる参加者」として扱い、Phase 4 でそのとき確認したツールだけを許可して spawn する。1 つでも確認できない、または読んでも判断がつかない場合は `self-reviewer` を spawn しない。「不明なら unrestricted で参加させる」は選ばない。ユーザーの未コミット作業を守ることを、レビューの参加者数より優先する。
-
-## Phase 4: レビュアーの spawn
-
-`claude-reviewer` は、このプラグインが `agents/claude-reviewer.md` として同梱している専用の subagent 定義である。`Agent` ツールに `subagent_type: "claude-reviewer"`（複数プラグインで名前が衝突する場合は `relubox:claude-reviewer`）を渡して spawn する。`model: opus` と読み取り専用のツール許可（`Read` / `Grep` / `Glob` / `SendMessage` / deepwiki MCP）はこの定義ファイル側に書いてあるので、呼び出し側で指定し直す必要は無い。Write / Edit / Bash はこのエージェントのツール許可リストに無いため、実行しようとしても失敗する。ファイルを変更しないという制約は、プロンプトの指示ではなくツール権限で担保される。
-
-spawn したら、返ってきた `name` と `agent_id` の両方を控える。**`name` はレポートや会話での表示・識別用途だけに使う。議論ラウンドの `SendMessage` は常に `agent_id` 宛に送る。** name → agent_id フォールバックという構造にはしない。
-
-```text
-spawn
-  ↓
-name と agent_id を保持
-  ↓
-表示・レポート → name
-SendMessage     → agent_id
+```bash
+git cat-file -e "<baseRefOid>^{commit}" && git cat-file -e "<headRefOid>^{commit}"
 ```
 
-**`self-reviewer` は fail-closed で参加させる。** `self-review` はこのスキルが所有していない外部スキルであり、Phase 3 で安全性を確認できた場合だけ、そのとき判明した最小限のツールを明示して spawn する。確認できなかった場合は spawn しない。「中身が分からないので unrestricted で参加させる」は選ばない。安全性が証明できないレビュアーを参加させるより、レビューの網羅性が `claude-reviewer` と Codex の 2 者に留まる方を優先する。
+どちらかが失敗したら、OID の取得と fetch を 1 組としてもう一度やり直す。2 回目も失敗したら、PR が更新され続けている可能性を報告して停止する。**OID が解決できないまま参加者を起動してはならない。** 全員の `git diff` が `bad object` で失敗し、その失敗は「指摘なし」と区別がつかない。
 
-安全性を確認できた場合、通常の `Agent` 呼び出しで `model: opus` と、Phase 3 で確認したツール allowlist を明示して spawn する。Claude 側 1 人（`claude-reviewer`）と Codex の 2 者でもレビューは成立する。
+`baseRefOid` と `headRefOid` を全参加者へ渡す。**渡したあとに PR が更新されても、参加者が読むのは fetch 済みのオブジェクトなので、全員が同じ内容を見る。**
+
+実装計画の有無は、会話またはユーザーが渡したパスから確認する。
+
+### 4. 未コミット変更の digest を記録する
+
+レビュー対象が未コミットの変更のとき、レビュアーを起動する前に内容の digest を取る。
+
+```bash
+{ git diff HEAD; git ls-files --others --exclude-standard | while read -r f; do printf '%s\n' "$f"; cat "$f"; done; } | shasum -a 256
+```
+
+この値を自分の手元に残す。Phase 3 の冒頭で同じコマンドを実行して比較する。
+
+## Phase 2: 並列レビュー
+
+### レビュアーの出力先を作る
+
+レビュアーを起動する前に、結果を書かせるディレクトリを 1 つ作る。
+
+```bash
+mktemp -d "${TMPDIR:-/tmp}/cross-review-out.XXXXXX"
+```
+
+**レビュアーの結果は `Agent` ツールの戻り値では回収しない。** 戻り値が親セッションへ届かないことがある。ファイルを正本にする。
+
+各レビュアーには、このディレクトリの下の**自分専用の絶対パスを 1 つだけ**渡す。ファイル名は `<出力先>/<役割名>.md` にする。
+
+このディレクトリは削除しない。`$TMPDIR` の下にあり、OS が回収する。Codex 用の一時ディレクトリとは別に作る。`run-codex-review.sh` は渡されたディレクトリを終了時に丸ごと削除するため、同じディレクトリを使うとレビュアーの書き込み中に消える。
+
+**1 回のメッセージで、起動条件を満たすレビュアー全員の `Agent` 呼び出しをすべて同時に行う。** そのうえで、同じターンのうちに Codex を実行する。
+
+**このフェーズの間、ワークツリーを変更してはならない。** レビュアーと Codex は、それぞれ別のタイミングで差分を取得するため、途中でファイルが変わると別々の状態をレビューすることになる。
+
+修正は Phase 4 まで行わない。レビュー中に、ユーザーとの並行した別件の会話や、別のタスクのコード変更もしない。
+
+レビュアー: `review-implementation` / `review-security` / `review-architecture` / `review-maintainability` / `review-plan-alignment`（Code レビューで、比較対象の実装計画が別途渡された場合のみ）。`subagent_type` は各エージェント定義の `name`。名前が衝突する場合は `relubox:review-<role>`。
+
+`model` とツール許可はエージェント定義ファイル側にあるので、呼び出し側で指定し直さない。
 
 ### 絶対パスだけを渡す
 
-**subagent のプロンプトに書くパスは、すべて絶対パスに展開する。** シェル変数を書かない。`references/plan.md` のような相対パスを書かない。subagent に埋めさせる `<プレースホルダ>` を残さない。subagent は別プロセスであり、main agent のシェル変数は存在せず、作業ディレクトリはレビュー対象のリポジトリになる。相対パスの `references/…` は存在しないパスに解決される。その結果、レビュアーは Severity 基準を持たないままレビューし、そのことを報告もしない。
+**subagent のプロンプトに書くパスは、すべて絶対パスに展開する。** シェル変数も、相対パスも、subagent に埋めさせる `<プレースホルダ>` も書かない。subagent は別プロセスなので、相対パスの `references/…` は存在しないパスに解決される。レビュアーは Severity 基準を持たないままレビューし、そのことを報告もしない。
 
-### レビュアーへ渡す動的情報（両者共通）
+### 各レビュアーへ渡すもの
 
-独立して調べる・確認前に報告しない・LOW を報告しない・deepwiki の使い方・書き込みをしないといった恒常的なルールは `agents/claude-reviewer.md` に書いてあり、`claude-reviewer` には毎回渡し直さない。両方のレビュアーに、今回のレビューでしか分からない動的な情報だけを渡す。
+- **結果の出力先の絶対パス**（`<出力先>/<役割名>.md`）。レビュアーごとに異なる
+- レビュー種別（Plan / Design / Code）と、判定基準ファイルの**絶対パス**
+- 「指摘が 0 件でも `問題なし` の 1 行を必ず返すこと。無言でターンを終えないこと」を毎回書く
+- `references/deepwiki.md` の絶対パス
+- 該当すれば `references/domains/<domain>.md` の絶対パス
+- レビュー対象の指定。次のいずれか 1 つ
+  - `PR 番号: <n> / baseRefOid: <base> / headRefOid: <head>`（fetch 済み）
+  - `レビュー対象の文書: <絶対パス>`（パスが無ければ本文そのもの）
+  - `PR 番号なし。未コミットの変更が対象`
+- `review-plan-alignment` にだけ、実装計画のパスまたは本文
 
-- ブリーフィング本文
-- レビュー範囲。未コミットレビューなら「ワークツリーを自分で読め」、PR レビューなら Phase 1 で取得した `gh pr diff` の出力テキストそのもの（レビュアーは Bash を持たないので、この場合は自分で取得できない。渡されたテキストだけを根拠にする）
-- レビュー種別と、判定基準ファイル・`references/deepwiki.md`・該当すれば `references/domains/<domain>.md` の絶対パス
-- 規約文書の場所（Phase 3 のブリーフィングに含めたもの）
-- **PR レビューかどうか**の事実。diff-only の evidence 制約とその扱いは `claude-reviewer` には `agents/claude-reviewer.md` に、`self-reviewer` には下記の恒常的ルールに書いてある
+Plan / Design レビューでは、判定基準ファイルの観点を役割ごとに分担する。担当表は各 `agents/review-*.md` にある。1 つの役割が不在になると、その担当分の観点は誰も確認していないことになる。報告の警告行にはその旨も書く。
 
-### `self-reviewer` へ追加で渡す恒常的ルール
-
-`self-reviewer` にはカスタム agent 定義が無いため、以下をそのまま spawn プロンプトに含める。
-
-```
-レビュー範囲は自分で読む（PR レビューでは、渡された diff テキストを読む）。
-指摘を報告する前に、その指摘を自分で確かめる。どの入力・状態で何が起きるかを書く。
-
-非推奨・削除済み・非慣用だと主張する前に、ロックファイルを読んで実際に
-入っているバージョンを使う。記憶を根拠にしない。deepwiki MCP が使える
-なら <references/deepwiki.md の絶対パス> の手順に従う。対象は最大 5 件。
-
-LOW・nitpick は報告しない。Critical な問題と、対応する価値があり修正が
-容易な問題だけを報告する。
-
-self-review スキルが不要コード・YAGNI・過剰な実装や抽象化・simplification
-のみを理由とする指摘を生成した場合、それらはこのレビューの finding として
-報告しない。具体的な correctness / security / data integrity / compatibility
-等の問題が成立する場合だけ報告する。
-
-PR レビューでは diff だけでは周辺実装・呼び出し側・変更されていない関数を
-確認できない。evidence を十分に確認できない指摘は、通常の指摘として断定
-せず「未確認の可能性」として別に報告する。確認に追加のファイル全文が要る
-と分かったら、その旨と対象ファイルを明示して伝える。main agent が git show
-で取得して渡す。
-
-指摘を報告するだけで、ファイルの変更・作成・削除はしない。チェックアウト
-状態も変えない。git stash / clean / reset / switch / checkout / restore と
-gh pr checkout は使わない。
-
-最初の指摘は、この依頼への返答としてそのまま書く。下の書式の 5 項目すべてを
-省略せずに書く。要約しない。
-
-この後、SendMessage で反論が届くことがある。届いたら、ファイルに戻って
-確認し、SendMessage で "main" 宛に回答を送る。回答を自分の手元に留めない。
-送らずにターンを終えると、main agent には何も届かない。
-
-この指示に加えて、self-review スキルを実行する。
-```
-
-チェックアウトに関する行が実際に効く部分である。「ファイルを変更するな」は中身の書き換えの話に読めるため、`gh pr checkout <n>` や `git checkout <branch>` を止められない。これらのコマンドは追跡ファイルを置き換え、ユーザーの未コミット作業、つまりレビュー対象そのものを消す。`claude-reviewer` は Bash 自体を持たないため、この行を渡す必要が無い。
-
-### spawn 後
-
-spawn したら、両方のレビュアーが動いている間に Phase 5 の Codex 実行へ進む。subagent を polling してはならない。メッセージは自動で届く。
+**渡してはならないもの**（この構成の要点である）: 変更ファイルの一覧、diff のテキスト、リポジトリの構造説明、「この設計は合意済み」などの設計判断の説明。
 
 subagent が権限プロンプトに当たると、このセッションに表示される。ユーザーに渡す。subagent の代わりに承認してはならない。
 
-## Phase 5: Codex の実行・議論・最終判断
+### Codex の実行
 
-このフェーズは main agent が Technical Review Lead として直接進める。他の何かを待つ前に Codex を実行する。数分かかり、その数分は Claude 側レビュアーが読んでいる時間と並行する。
+Codex は main agent が自分で実行する。レビュアーへ委譲したあと、結果を待たずに続けて実行する。数分かかり、その数分はレビュアーが読んでいる時間と並行する。
 
-### 1. Codex を動かす
+Codex には役割を割らない。範囲全体を 1 人で見る、別モデルとしての交差チェックとして扱う。役割で分割すると、Claude 側の分担と重複する。
 
-1 ラウンドは 2 段階で行う。まず一時ディレクトリを作り、リクエストを `Write` ツールでその中に書く。
+#### 1. Codex を動かす
+
+まず一時ディレクトリを作り、リクエストを `Write` ツールでその中に書く。
 
 ```bash
 mktemp -d "${TMPDIR:-/tmp}/cross-review.XXXXXX"
 ```
 
-**リクエストをシェルの引数やヒアドキュメントで組み立ててはならない。** ブリーフィングにも、後のラウンドで逐語引用する指摘にも、任意の文字列が入りうる。バッククォート、`$`、そしてヒアドキュメントの区切り文字と同じ内容の行。区切り文字と一致する行があるとヒアドキュメントはそこで終わり、残りの行がシェルコマンドとして実行される。終了コードは 0 のままなので、失敗したことが誰にも分からない。リクエストを `Write` ツールでファイルに書き、標準入力から渡せば、これらの場合がすべて消える。
+**リクエストをシェルの引数やヒアドキュメントで組み立ててはならない。** `Write` ツールでファイルに書き、標準入力から渡す。
 
 次に、同梱スクリプトを 1 回の Bash 呼び出しで実行する。`timeout: 600000` を指定する。
 
@@ -272,98 +208,108 @@ bash <このスキルのベースディレクトリ>/scripts/run-codex-review.sh
 
 スクリプトは `<tmpdir>/request.md` を Codex に渡し、`<tmpdir>/codex.md` に書かれた最終メッセージだけを標準出力に返し、終了時に `<tmpdir>` を丸ごと削除する。`--sandbox read-only` の付与、標準出力・標準エラー出力の抑制、終了コードと空ファイルの判定、削除対象を `cross-review.??????` の形に限定する安全策は、スクリプト自身のコメントに書いてある。ここでの責務は、リクエストを書いて渡すことと、失敗時の再試行だけである。
 
-失敗判定: 出力全体が `CODEX_FAILED status=<rc>` または `CODEX_FAILED reason=<理由>` の 1 行だけなら、1 回だけ再実行する。再度失敗したら Claude 側のレビュアーだけで続け、レポートに `不在: <失敗の内容>` と書く。
+失敗判定: 出力全体が `CODEX_FAILED status=<rc>` または `CODEX_FAILED reason=<理由>` の 1 行だけなら、1 回だけ再実行する。
 
-回答はコマンドの出力から読み、必要な内容を自分のコンテキストに保持する。呼び出しが返った時点で `<tmpdir>` は削除済みである。
+**再実行は最初からやり直す。** スクリプトは成功・失敗を問わず終了時に `<tmpdir>` を丸ごと削除するため、同じ引数で呼び直すと `CODEX_FAILED reason=invalid_tmpdir` になり、`request.md` も残っていない。新しい `mktemp -d`、新しい `request.md` の `Write`、新しいディレクトリでのスクリプト実行まで、最初から繰り返す。
 
-このコマンドを実行している間、main agent のセッションは占有される。レビュー中に別のコード変更や、ユーザーとの並行した別件の会話はしない。
+再度失敗したら役割別レビュアーだけで続け、レポートに `不在: <失敗の内容>` と書く。
 
-### リクエストに必ず含めるもの
+回答はコマンドの出力から読み、必要な内容を自分のコンテキストに保持する。
 
-初回の呼び出しにも、議論の各ラウンドにも、同じものを含める。議論ラウンドは初回の記憶を持たない新しいプロセスであり、指摘と反論だけを渡すのは、Severity の表を見たことがない相手に Severity を答えさせることになる。
+#### 2. リクエストに含めるもの
 
-- ブリーフィング本文
-- レビュー範囲と、その内外の境界。PR レビューでは `gh pr diff` の出力テキストそのものを含める。Codex は `--sandbox read-only` で動いており、ネットワーク越しに `gh` を呼べる保証が無いため、diff は埋め込みで渡し、Codex 自身に取得させない
-- 判定基準ファイルと `references/deepwiki.md` の絶対パス
-- 下の指摘の書式
-- レビュアーに渡したのと同じロックファイルのルール（Codex は MCP を持たないので、deepwiki の部分を除いたロックファイルの部分だけ）
-- 以下の 3 文をそのまま
-  1. "No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples."
-  2. "Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing that are easy to address. Omit minor nitpicks and style preferences."
-  3. "Do not report YAGNI, unnecessary abstraction, unnecessary generalization, or \"this could be simpler\" findings unless they cause a concrete correctness, security, data-integrity, compatibility, or execution problem."
+レビュー対象のファイル一覧・diff テキスト・構造調査結果は含めない。レビュアーと同じく自分で取得させる。
 
-### 2. 指摘の書式
+- レビュー種別と、判定基準ファイル・`references/deepwiki.md` の絶対パス
+- レビュー対象の指定。「各レビュアーへ渡すもの」と同じ 3 通りの書式を使う
+- 次の指示（英文でそのまま書く）
 
-Codex からのものもレビュアーからのものも、以下をすべて持つ。最後の 2 つが欠けている指摘は議論にかけられない。提出者に差し戻してから先へ進む。
+```
+Determine the review scope yourself, from the local Git repository or the document named above.
+With a PR: the objects are already fetched. Use `git diff <baseRefOid>...<headRefOid>`
+for the change, `git show <headRefOid>:<path>` to read a file at the PR head, and
+`git grep <pattern> <headRefOid>` to search the PR head. Do not run `gh`, and do not
+read the working tree for PR files -- the checked-out branch is not the PR head.
+With a document path: that document is the whole scope. Do not look at Git diffs.
+With neither: the uncommitted changes in the working tree. Check all three of
+`git diff`, `git diff --cached`, and `git ls-files --others --exclude-standard`.
+
+Inspect any repository files necessary to understand the change.
+Do not report unrelated pre-existing issues.
+Report only issues introduced by or materially affected by the current change.
+Provide concrete evidence such as file paths, lines, code behavior, or dependency relationships.
+
+No questions or confirmations needed. Proactively output specific proposals, fixes, and code examples.
+
+Filter findings by: (1) Critical issues (bugs, security, design flaws), (2) Issues worth fixing. Omit minor nitpicks and style preferences. Do not drop a finding because the fix would be large.
+
+Read the criteria file at the absolute path given above in full before you start. Use its severity table, its scope boundaries, and -- for a Plan or Design review -- its list of review aspects.
+If you find nothing, reply with a single line saying so. Do not end without a reply.
+```
+
+- 指摘の書式（下記）
+- バージョンの主張はロックファイルで確認すること（下記の記述のうち、deepwiki MCP に触れない部分だけ）
+
+### 指摘の書式
+
+Codex の指摘は以下をすべて持つ。
 
 | 項目 | 内容 |
 |------|------|
-| id | `C1`、`H2` など。この実行中は変えない |
+| id | `C1`、`H2` など |
 | severity | `references/<type>.md` の基準による |
 | location | `file:line`、見出し、またはステップ番号 |
 | claim | 何が問題かを 1 文で |
 | evidence | どの入力・状態で何が起きるか。それを示すコードの経路 |
 
-### 3. 収集
+### 収集
 
-Codex には数分かかるので、返ってきた時点でレビュアーは報告済みのことが多い。誰が報告済みかを確認し、沈黙は待つのではなく追いかける。
+**レビュアーごとに、次のどちらかが起きるまで待つ。**
 
-1. **未報告のレビュアーに、直接メッセージを 1 通送る。** 状況を尋ねるのではなく、指摘を今送るよう求める。レビュアーが黙る原因には、自然に解消しないものがある。権限プロンプトで止まっている、手元に書いたまま送らずにターンを終えた、失敗した。どれもこちらを起こすメッセージを生まないので、待っても永久に来ない。
-2. **そのあとターンを終える。** 回答が届けば起きる。
-3. **2 回目の催促でも返らなければ**、答えた参加者だけで進み、沈黙した相手をレポートに `不在: 応答なし` と記録する。2 人のうち 1 人が欠けてもレビューは成立するが、終わらないレビューは成立しない。
+- そのレビュアーの出力ファイルが、最終行に `<!-- CROSS_REVIEW_COMPLETE -->` を持った状態で現れる
+- そのレビュアーのターンが終わり、待機状態になったという通知が届く
 
-このために sleep・polling・待機ループを使ってはならない。催促そのものが仕組みである。
+どちらかが起きた時点で、そのレビュアーの出力ファイルを `Read` で読む。**Codex の完了はレビュアーを打ち切る条件にしない。** Codex は数十秒で失敗が確定することもあり、その時点ではレビュアーがまだ読んでいる。
 
-### 4. 議論
+- ファイルがあり、最終行がマーカー → その役割の指摘として採用する
+- ファイルが無い、または最終行がマーカーでない → その役割を `不在: 結果ファイルなし` と記録する
 
-- **一致** — Codex とレビュアーが同じ問題を挙げた。反論にかけず、そのまま評価へ。
-- **対立** — 片方が挙げ、もう片方が否定している。
-- **単独** — 片方が挙げ、誰も反論していない。挙げていない側に反論させる。誰も検討していない指摘は、1 人だけで作業したレビュアーの指摘と同じ価値しかない。
+sleep・polling・待機ループは使わない。通知は自動で届く。
 
-指摘は id・severity・location・claim・evidence の 5 項目を省略せずに引用する。言い換えない。そのうえで、3 択の判定と根拠を求める。
+レビューを終える前に、起動したレビュアーをすべて `TaskStop` で停止する。
 
-```
-<指摘の全文。5 項目すべて>
+## Phase 3: トリアージ
 
-<反論の全文>
+議論は行わない。main agent が各指摘を自分で確認して振り分ける。
 
-ファイルに戻って確認し、次のいずれか 1 つだけで答える:
-  maintain / downgrade to <severity> / withdraw
-そして根拠を書く。確認したファイルと行、そこで何を見つけたか。
-率直に、遠慮なく反論してよい。
-```
+**まず、レビュー対象が途中で変わっていないか確認する。** 未コミットの変更が対象のとき、Phase 1 step 4 と同じコマンドを実行し、記録した digest と比較する。
 
-Claude 側のレビュアーには `SendMessage` で送る。Codex には次の `codex exec` で送る。初回とまったく同じ手順で組み立てる。一時ディレクトリを作り、リクエストをファイルに書いて標準入力から渡し、「リクエストに必ず含めるもの」をすべて再送する。Severity を答えさせるラウンドのリクエストに、Severity の表が入っていなければならない。
+一致しなければ、レビュー中にファイルが変わっている。参加者ごとに別の状態を読んでいるため、指摘の `file:line` と evidence が信用できない。**この結果は採用せず**、ユーザーにその事実を報告して、レビューをやり直すかどうかを確認する。
 
-**指摘の当否は、レビュー範囲を読んだレビュアーの判定を基本にする。** Codex とレビュアーの言葉はそのまま運ぶ。書き換えない。そのうえで、main agent が持つ実装計画と会話の文脈を根拠に、最終判断を下す。
+1. **重複の統合**: 複数のレビュアーと Codex が同じ問題を挙げていたら 1 件に統合する。特に `review-architecture` と `review-maintainability` は重複が出やすい。統合した指摘には、何人が独立して挙げたかを記録する（採否の判断材料にする）
+2. **evidence の確認と処分**: 指摘の evidence が成立するかを、main agent が該当ファイルを読んで確認する。**PR レビューでは `git show <headRefOid>:<path>` と `git grep <pattern> <headRefOid>` で読む。** ローカルのワークツリーは PR head と一致していないため、`Read` で読むと別の内容を見ることになる。オブジェクトは Phase 1 で fetch 済みである。結果で 3 つに分ける。
 
-| 状況 | 結論 |
-|------|------|
-| 両者が支持した | 維持 |
-| 提起者が撤回した | 除外 |
-| 提起者が降格した | その Severity で維持 |
-| 両者が支持したが、承認済みの実装計画の Constraints または会話で確定した設計判断と矛盾する | **却下**。実装計画の該当節見出し、または会話中の具体的な発言を引用して理由を書く |
-| 2 ラウンド経ても両論が並んだまま | 未決着。両方の立場を記録する |
+   - **反証された**: finding 不成立として破棄する。最終報告に載せない
+   - **確認できた**: Severity の判定へ進める
+   - **確認できない**: 「判断が必要」へ送る。差し戻しはしない
 
-**却下は乱用しない。** 引用できる根拠が無い限り却下してはならない。「自分がそう設計したから」だけでは根拠にならない。根拠は実装計画の節見出しか、会話の具体的な発言でなければならない。迷ったら却下せず「維持」または「判断が必要」に回す。
-
-**バージョンに関する指摘は議論ではなく証拠で決める。** ある API が非推奨・非慣用・削除済みだという指摘には、`references/deepwiki.md` の手順で、そのバージョンを明示して deepwiki に問い合わせる。裏が取れたら指摘を維持して回答を引用する。否定されたら取り下げる。答えが得られなければ **未検証** として Severity を 1 段下げる。この確認は議論のラウンド数に数えない。
-
-**1 論点あたり 2 往復まで。** 3 ラウンド目を始めてはならない。
-
-### 5. トリアージ
-
-`references/<type>.md` の表で Severity を付ける。LOW はすべて落とす。却下した指摘は「却下した指摘」に理由付きで回す。**取り下げられた指摘はここで捨てる。報告には残さない。** 指摘した側が誤りを認めて撤回したものであり、ユーザーが判断する材料にならない。
+   今回の変更と無関係な既存の問題を報告した finding も、ここで破棄する。レビュアーと Codex に同じ制約を渡しているが、守られなかった場合の受け皿を main agent 側にも置く。
+3. **Severity の確定**: `references/<type>.md` の表で付ける。LOW はすべて落とす
+4. **振り分け**
 
 残りを、修正が一意に決まるかどうかで分ける。
 
-**修正を提案する** — 以下をすべて満たす。正しい挙動が一意に定まる。妥当な修正が 1 つしかない。修正がレビュー範囲の内側に収まり、新しい依存・スキーマ変更・公開 API の変更を必要としない。議論の結果が未決着ではない。
+**修正を提案する** — 以下をすべて満たす。正しい挙動が一意に定まる。妥当な修正が 1 つしかない。修正がレビュー範囲の内側に収まり、新しい依存・スキーマ変更・公開 API の変更を必要としない。
 
-**判断が必要** — 以下のいずれかに当たる。妥当な修正が複数あり、選択が設計判断になる。意図した挙動が不明で、レビュアーの見解が割れた。修正がレビュー範囲の外に及ぶ。議論が未決着で終わった。
+**判断が必要** — 以下のいずれかに当たる。妥当な修正が複数あり、選択が設計判断になる。意図した挙動が不明で、レビュアーの見解が割れた。修正がレビュー範囲の外に及ぶ。確認にレビュー範囲外の実行やユーザーしか知らない情報が要る。
 
 迷ったら「判断が必要」に入れる。
 
-## Phase 6: 修正・報告
+**却下できる指摘は限られる。** 承認済みの実装計画の Constraints または会話で確定した設計判断と矛盾する指摘だけを却下し、実装計画の該当節見出しか会話中の具体的な発言を引用して理由を書く。引用できる根拠が無い限り却下してはならない。「自分がそう設計したから」だけでは根拠にならない。迷ったら却下せず「判断が必要」に回す。
+
+**バージョンに関する指摘は証拠で決める。** ある API が非推奨・非慣用・削除済みだという指摘には、`references/deepwiki.md` の手順で、そのバージョンを明示して deepwiki に問い合わせる。裏が取れたら指摘を維持して回答を引用する。否定されたら取り下げる。答えが得られなければ **未検証** として Severity を 1 段下げる。
+
+## Phase 4: 修正・報告
 
 ### 1. 編集が承認されているときだけ修正する
 
@@ -373,11 +319,9 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 
 ### 修正スコープを守る
 
-目的は最も単純なコードにすることではない。レビュー依頼で承認されていない変更まで main agent が勝手に行わないことである。
+レビュー依頼で承認されていない変更まで main agent が勝手に行わないためである。
 
-- レビューで確認された claim/evidence の修正だけを行う。指摘が指す箇所だけを直し、ついでの整理はしない
-- 修正対象外のコードを変更しない
-- 承認されたレビュー scope を越えて変更しない
+- レビューで確認された claim/evidence が指す箇所だけを直す。ついでの整理をしない
 - 新しい dependency・schema・公開 API の変更が必要な修正は自動修正せず「判断が必要」に回す
 
 ### 2. 報告
@@ -387,14 +331,17 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 ```
 ## レビュー結果
 
+> **レビュー品質の低下: <不在だった役割名をすべて列挙> が不在。これらの観点は誰も確認していない。**
+
 ### スコープ / レビュアー / バージョン確認
-<レビューしたファイル、参加したレビュアー（不在ならその理由も）、deepwiki で確認したバージョン>
+<レビューしたファイル、役割ごとの参加状況（どの役割が何件挙げたか、不在の役割があればその理由）、deepwiki で確認したバージョン、および「依存の既知脆弱性は未検証（advisory データベースを引く手段が無い）」の 1 行>
 
 ---
 
 ## 修正した指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
+**id / severity**: <C1 / CRITICAL など>
 **指摘**: <何が問題だったか>
 **修正前の挙動**: <具体的な入力・状態> のとき <具体的な結果>
 **修正後の挙動**: 同じ入力で <具体的な結果>
@@ -405,6 +352,7 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 ## 修正を提案する指摘（編集は未承認）
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
+**id / severity**: <C1 / CRITICAL など>
 **指摘**: <何が問題か>
 **現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
 **提案する修正**: <置き換える内容そのもの>
@@ -414,7 +362,9 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 ## 判断が必要な指摘
 
 ### 1. <title>  `<file:line / 見出し / ステップ番号>`
+**id / severity**: <C1 / CRITICAL など>
 **指摘**: <何が問題か>
+**指摘元**: <役割名・Codex のうち、この指摘を挙げた者。複数なら全員>
 **現在の挙動**: <具体的な入力・状態> のとき <具体的な結果>
 **選択肢**:
 - A: <案> — <トレードオフ>
@@ -427,10 +377,12 @@ Claude 側のレビュアーには `SendMessage` で送る。Codex には次の 
 - <指摘> — 却下理由: <実装計画の節見出し、または会話中の発言>
 ```
 
+**期待した参加者は、起動条件を満たして実際に起動した者だけである。** 起動条件を満たさず起動しなかった役割は「対象外」であり、不在ではない。Plan レビューで `review-plan-alignment` を起動しないのは対象外であって、警告の対象にしない。
+
+**起動したのに結果が得られなかった参加者が 1 人でもいれば、警告行を報告の先頭に出す。** 全員から結果が得られた場合だけ、この行を省く。役割分担型なので、`review-security` が不在のレビューは security を確認していないレビューである。他のレビュアーが肩代わりしたわけではない。
+
+Codex が不在だった場合も同じ扱いにする。Codex は別モデルによる交差チェックであり、Claude 側のレビュアーが代わりにはならない。
+
 挙動を書く 2 行には具体的な値を入れる。実際の入力、実際の出力、実際のエラーメッセージ。「正しく動くようになった」は報告ではない。「空配列を渡すと `TypeError: cannot read length of undefined` で落ちていたのが、`0` を返すようになった」が報告である。
 
 該当が無い節は省く。
-
-### 実行中のレビューの確認
-
-ユーザーに進捗を聞かれたら、記憶から答えず、そのまま自分の状態を答える。この実行はファイルを残さない。

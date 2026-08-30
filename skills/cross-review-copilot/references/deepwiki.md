@@ -2,7 +2,7 @@
 
 レビュアーの学習データより新しいバージョンを使っている場合、そのバージョンでの推奨実装をレビュアーは知らない。知らないことに気づかないまま「問題なし」と判断するか、古いバージョンの知識で誤った指摘を出す。deepwiki MCP は GitHub リポジトリのソースとドキュメントを直接読んで答えるため、この穴を埋められる。
 
-**この手順はレビュアー自身が、レビュー範囲を読んだあとで実行する。** host がブリーフィング作成時に代わりに調べて渡すことはしない。どのライブラリが version-sensitive かは、変更ファイルを実際に読んだレビュアーの方が正確に判断できる。
+**この手順はレビュアー自身が、レビュー範囲を読んだあとで実行する。** host が代わりに調べて渡すことはしない。どのライブラリが version-sensitive かは、変更ファイルを実際に読んだレビュアーの方が正確に判断できる。
 
 deepwiki MCP が使えないときは、この手順を丸ごとスキップする。スキップしたことはレポートに 1 行書く（黙って落とすと、確認したのかしていないのか分からなくなる）。
 
@@ -12,9 +12,13 @@ deepwiki MCP が使えないときは、この手順を丸ごとスキップす�
 
 無制限に調査しない。version-sensitive な指摘（非推奨 API の使用、EOL したランタイムへの依存など）を出す・出された指摘を裏取りするときだけ使う。
 
+## ネットワーク越しのレジストリ問い合わせはしない
+
+役割別レビュアーは `node -p`・`npm view`・`curl` のようなネットワークを使うコマンドを使わない。レビューのたびに外部レジストリへ問い合わせると再現性が下がり、ネットワークの無い環境で動かなくなる。以下の手順はローカルファイルを直接読む方法だけで組み立てる。キャッシュが無ければ、そのライブラリはスキップする。推測や記憶で埋めない。
+
 ## 手順 1: バージョンを特定する
 
-**必ずバージョンを特定してから質問する。** 最新版の話を聞いても、こちらが使っているのが 2 世代前なら答えは役に立たない。
+**必ずバージョンを特定してから質問する。** 最新版の話を聞いても、こちらが使っているのが 2 世代前なら答えは役に立たない。ファイルの中身を読めばよく、コマンド実行は不要。
 
 ### 言語・ランタイム
 
@@ -37,22 +41,14 @@ deepwiki MCP が使えないときは、この手順を丸ごとスキップす�
 
 ### ライブラリ・フレームワーク
 
-ロックファイルの解決済みバージョンを使う。マニフェストのレンジ指定（`^4.0.0`）ではなく、実際に入っている版を見る。
+ロックファイル、または実際にインストール済みのパッケージが持つメタデータの解決済みバージョンを使う。マニフェストのレンジ指定（`^4.0.0`）ではなく、実際に入っている版を見る。
 
-```bash
-# npm / pnpm / yarn
-node -p "require('./node_modules/<pkg>/package.json').version"
-# 上が使えない場合はロックファイルを読む
-
-# Go
-grep '<module path>' go.mod
-
-# Python
-grep -i '^<pkg>' requirements.txt uv.lock poetry.lock 2>/dev/null
-
-# Rust
-grep -A1 'name = "<pkg>"' Cargo.lock
-```
+| エコシステム | 読むファイル |
+|------|--------|
+| npm / pnpm / yarn | `node_modules/<pkg>/package.json` の `version`。無ければ `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` |
+| Go | `go.mod` の `require <module path> v<version>` |
+| Python | `requirements.txt` / `uv.lock` / `poetry.lock` の該当行 |
+| Rust | `Cargo.lock` の `name = "<pkg>"` に続く `version` |
 
 バージョンが特定できないものは質問対象から外す。バージョン無しで聞いた答えは検証に使えない。
 
@@ -78,36 +74,21 @@ deepwiki は `owner/repo` 形式しか受け付けない。
 | .NET | `dotnet/runtime` |
 | Spring Boot | `spring-projects/spring-boot` |
 
-### ライブラリ・フレームワーク（レジストリから解決）
+### ライブラリ・フレームワーク（ローカルのメタデータから解決）
 
-```bash
-# npm
-npm view <pkg> repository.url        # → git+https://github.com/honojs/hono.git
+| エコシステム | 読むファイル | 見る場所 |
+|------|------|------|
+| npm | `node_modules/<pkg>/package.json` | `repository.url` |
+| Go | `go.mod` のモジュールパス | `github.com/<owner>/<repo>` ならそのまま |
+| Rust | `~/.cargo/registry/src/index.crates.io-*/<pkg>-<version>/Cargo.toml` | `repository = "..."` |
+| Python | `<venv>/lib/python*/site-packages/<pkg>-<version>.dist-info/METADATA` | `Project-URL: Source, ...`。無ければ `Home-page:` |
+| Maven | `~/.m2/repository/<groupId>/<artifactId>/<version>/<artifactId>-<version>.pom` | `<scm><url>`。`<project><url>` は使わない |
 
-# PyPI
-curl -s https://pypi.org/pypi/<pkg>/json   # info.project_urls を読む
-
-# crates.io
-curl -s https://crates.io/api/v1/crates/<pkg> -H 'User-Agent: cross-review'   # crate.repository
-
-# Go
-# go.mod のモジュールパスが github.com/<owner>/<repo> ならそのまま使える
-
-# Maven Central（Kotlin / Java / Spring Boot などの JVM ライブラリ）
-curl -s https://repo1.maven.org/maven2/<groupIdをスラッシュ区切り>/<artifactId>/<version>/<artifactId>-<version>.pom
-# 例: org.springframework.boot:spring-boot:3.4.1
-#     → https://repo1.maven.org/maven2/org/springframework/boot/spring-boot/3.4.1/spring-boot-3.4.1.pom
-```
-
-**POM は `<scm>` ブロックの `<url>` を読む。** ファイル先頭のプロジェクト `<url>` はプロダクトサイトを指しており、GitHub ではない（実例: Spring Boot は `https://spring.io/projects/spring-boot`）。`<scm><url>` に `https://github.com/spring-projects/spring-boot` が入っている。
-
-**PyPI の `project_urls` は最初に見つかった github.com URL を取ってはいけない。** `Funding` が `github.com/sponsors/<user>` を指していることがあり、スポンサーページを掴む（実例: `pydantic` は `Funding` が先に並んでいる）。
-
-`Source` → `Repository` → `Code` → `Homepage` の順で探し、`/sponsors/` を含む URL は除外する。末尾の `.git` は削る。
+PyPI は `Source` → `Repository` → `Code` → `Homepage` の順で探し、`/sponsors/` を含む URL は除外する。末尾の `.git` は削る。
 
 ### 解決できなかった場合
 
-そのライブラリは質問対象から外す。推測でリポジトリ名を組み立てない。
+ローカルにキャッシュが無ければ質問対象から外す。推測でリポジトリ名を組み立てず、`npm view` や `curl` で解決しない。
 
 ## 手順 3: 質問する
 
@@ -117,18 +98,6 @@ deepwiki MCP の `ask_question` に `repoName` と `question` を渡す。**ques
 In <name> v<version>, <具体的な質問>.
 Answer for v<version> specifically, not for the latest release.
 ```
-
-### 用途別テンプレート
-
-**(a) レビュアー自身の初回調査**（レビュー範囲を読んだ直後、指摘を出す前）
-
-```
-In <name> v<version>, what are the recommended APIs and patterns for <スコープで使っている機能>?
-Which APIs were recommended in earlier versions but are deprecated or discouraged in v<version>?
-Answer for v<version> specifically, not for the latest release.
-```
-
-**(b) 指摘の裏取り**（議論で version claim が争点になったとき）
 
 ```
 In <name> v<version>, is `<API名>` deprecated or discouraged?
@@ -141,6 +110,8 @@ Answer for v<version> specifically, not for the latest release.
 
 「非推奨でないなら、そうと明言せよ」を入れるのは、質問の形に引きずられて非推奨だと答えてしまうのを防ぐため。「現バージョンでまだ動作するか」「削除予定バージョンが明示されているか」を聞くのは、Severity を「deprecated」というラベルではなくこの確認結果から決めるため（`references/code.md` の Severity 基準を参照）。
 
+使っている機能全体を調べたい場合は、`<API名>` の行を `<スコープで使っている機能>` に替えて同じ形で聞く。
+
 ## 手順 4: 結果の扱い
 
 **指摘として提出するとき**: deepwiki の回答を出典として引用する。Severity はラベルではなく、回答が示す実害（現バージョンで動作するか、削除予定バージョンが決まっているか）から `references/code.md` / `references/design.md` の基準に当てはめる。
@@ -150,10 +121,8 @@ Answer for v<version> specifically, not for the latest release.
 <回答>
 ```
 
-**議論で争点になったとき**: バージョン整合性に関する指摘は、deepwiki の回答を証拠として提出させる。
+**host がトリアージするとき**: バージョン整合性に関する指摘は、deepwiki の回答を証拠にして採否を決める。
 
 - 裏が取れた → 指摘を維持し、レポートに deepwiki の該当箇所を引用する。Severity は上記の基準で当てはめ直す
 - 否定された → 指摘を取り下げる
 - deepwiki が答えられなかった、または対象を解決できなかった → **未検証**として扱い、Severity を 1 段下げる。記憶だけを根拠に非推奨と断定しない
-
-この確認は議論のラウンド数に数えない。
