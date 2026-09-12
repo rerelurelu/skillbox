@@ -11,8 +11,6 @@ license: "GPL-3.0"
 
 # Codex Review
 
-Codex に read-only でレビューさせ、その指摘を main agent が裁定する。
-
 役割は非対称である。**Codex は reviewer であって決定権を持たない。main agent がコードの owner であり、各指摘を採用するかどうかを決める。** 変更の意図、ユーザーと確定した設計判断、承認済みの実装計画を持っているのは main agent だけであり、Codex はそれを知らない。
 
 このスキルの前に `self-check` が終わっていることを前提にする。要件の実装漏れ、TODO の残り、lint / typecheck / test の失敗は、独立レビューへ出す前に本人が潰しておく範囲である。
@@ -39,7 +37,7 @@ command -v codex
 | ベースブランチとの差分 | `codex review --base <branch>` |
 | 特定のコミット | `codex review --commit <sha>` |
 
-既定のレビュー対象は未コミットの変更である。Phase 3 の修正まで、ワークツリーを変更しない。
+Phase 3 の修正まで、ワークツリーを変更しない。
 
 `Bash` の `timeout` に `600000` を指定する。数分かかる。
 
