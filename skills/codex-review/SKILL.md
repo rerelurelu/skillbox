@@ -5,7 +5,7 @@ description: |
   Triggers on: "レビュー", "レビューして", "review", "code review", "codex review", "/codex-review"
   Use when: implementation and self-check are done and the change is ready for an independent reviewer.
 user-invocable: true
-argument-hint: "[--base <branch> | --commit <sha> | 空欄で未コミットの変更]"
+argument-hint: "[レビュー対象。空欄で未コミットの変更]"
 license: "GPL-3.0"
 ---
 
@@ -29,19 +29,27 @@ command -v codex
 
 ## Phase 1: Codex の実行
 
-レビュー対象に応じてコマンドを選ぶ。`$ARGUMENTS` に指定が無ければ `--uncommitted` を使う。リポジトリのルートで実行する。
+リポジトリのルートで `codex review` を実行し、次のプロンプトを渡す。`Bash` の `timeout` に `600000` を指定する。数分かかる。
 
-| 対象 | コマンド |
-|---|---|
-| 未コミットの変更（既定） | `codex review --uncommitted` |
-| ベースブランチとの差分 | `codex review --base <branch>` |
-| 特定のコミット | `codex review --commit <sha>` |
+```
+Review <レビュー対象>.
+
+In addition to the usual defect review, check conformance to this project's
+architecture rules: responsibilities placed in the wrong layer, dependencies
+pointing the wrong way, duplicated implementations of the same rule, and
+changes that contradict the conventions written in AGENTS.md or CLAUDE.md.
+Report architecture deviations as findings in the same format as other findings.
+```
+
+`<レビュー対象>` は、`$ARGUMENTS` の指定があればそれを書く。無ければ `the uncommitted changes in this repository` とする。ベースブランチとの差分なら `the changes on this branch against the base branch <branch>` のように書く。
+
+**`--uncommitted` / `--base` / `--commit` フラグは使わない。** これらはプロンプト引数と併用できず、フラグを使うとアーキテクチャ観点を足せない。対象はプロンプトの文章で指定する。
+
+過去のコミットをレビュー対象にしない。Phase 2 と Phase 3 はワークツリーのファイルを読んで編集するため、チェックアウトされているものと別のリビジョンをレビューすると、見ている内容と直す対象が食い違う。
 
 Phase 3 の修正まで、ワークツリーを変更しない。
 
-`Bash` の `timeout` に `600000` を指定する。数分かかる。
-
-**プロンプトを渡さない。** `codex review` はレビュー用の指示と判定条件を自分で持っている（`~/.codex/skills/.system/review-agent/`）。`approval-policy: never` と `sandbox: read-only` も自動で付く。ここで独自のレビュー観点を上書きすると、Codex 側が更新されても追従しなくなる。
+**レビューの観点そのものは書き足さない。** `codex review` は判定条件と優先度の定義を自分で持っている（`~/.codex/skills/.system/review-agent/`）。`approval-policy: never` と `sandbox: read-only` も自動で付く。上のプロンプトが足しているのはアーキテクチャ観点 1 つだけで、それ以外を上書きすると Codex 側が更新されても追従しなくなる。
 
 出力にはコマンド実行ログが混ざり、最後の指摘ブロックが 2 回出力されることがある。指摘は 1 回分だけ読む。
 
@@ -57,7 +65,7 @@ Phase 3 の修正まで、ワークツリーを変更しない。
 | **REJECT** | evidence が成立しない、今回の変更と無関係な既存の問題、確定済みの設計判断と矛盾、実際には起きない |
 | **DEFER** | 指摘は正しいが、今回のスコープ外 |
 
-REJECT の理由には根拠を書く。承認済み実装計画の該当節か、会話で確定した発言を引用する。「自分がそう設計したから」は根拠にならない。迷ったら REJECT せず、報告に回す。
+REJECT の理由には根拠を書く。反証したコードの箇所（`file:line`）、承認済み実装計画の該当節、会話で確定した発言のいずれかを示す。「自分がそう設計したから」は根拠にならない。迷ったら REJECT せず、報告に回す。
 
 バージョンに関する指摘（この API は非推奨だ、削除済みだ）は、lockfile で実際に解決されているバージョンを確認してから判定する。確認できなければ REJECT せず、未検証として報告に回す。
 
@@ -80,6 +88,7 @@ REJECT の理由には根拠を書く。承認済み実装計画の該当節か�
 - **レビュー結果** — 対象範囲、指摘件数（ACCEPT / REJECT / DEFER の内訳）
 - **修正した指摘** — title、`file:line`、優先度、指摘内容、修正前の挙動、修正後の挙動、変更内容
 - **方針を決める必要があるもの** — title、`file:line`、優先度、指摘内容、現在の挙動、選択肢とそれぞれのトレードオフ、判断が必要な理由
+- **採用したが今回は修正しないもの** — title、`file:line`、優先度、指摘内容、修正しなかった理由（P2 以下、または Phase 2 で検証できなかった）
 - **却下した指摘** — 指摘と、却下の根拠（実装計画の節見出し、または会話中の発言）
 - **今回は対応しないもの（DEFER）** — 指摘と、スコープ外と判断した理由
 - **検証** — lint / typecheck / test の結果
