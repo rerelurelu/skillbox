@@ -41,7 +41,7 @@ When creating or editing a skill in this repo, follow these rules. For deeper gu
 
 ### Agent definitions
 
-Agent definitions under `agents/*.md` are registered once, when a Claude Code session starts. **Editing an agent's `tools`, `model`, or other frontmatter does not affect a session that is already running** — the session keeps using the definition it loaded at startup. Verified by measurement: a reviewer kept running without a newly added `Write` tool even though the file on disk had it.
+Agent definitions under `agents/*.md` are registered once, when a Claude Code session starts. **Editing an agent's `tools`, `model`, or other frontmatter does not affect a session that is already running** — the session keeps using the definition it loaded at startup. Verified by measurement: a subagent kept running without a newly added `Write` tool even though the file on disk had it.
 
 After changing `agents/*.md`, reinstall and verify in a **fresh** session.
 
