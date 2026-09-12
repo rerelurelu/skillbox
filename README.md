@@ -12,7 +12,7 @@ Two ways in. They coexist: install whichever fits the agent you are using.
 
 ### Claude Code plugin
 
-Installs every skill except `cross-review-copilot` (that one only runs inside GitHub Copilot CLI) in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
+Installs every skill in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
 
 ```
 /plugin marketplace add rerelurelu/skillbox
@@ -28,39 +28,34 @@ Note that Copilot CLI does not read `~/.claude/plugins/`, so a plugin install do
 Per-skill installs, and the only route for agents other than Claude Code. Install all skills at user scope for Claude Code:
 
 ```bash
-gh skill install rerelurelu/skillbox deslop-comments --agent claude-code --scope user
-gh skill install rerelurelu/skillbox cross-review --agent claude-code --scope user
+gh skill install rerelurelu/skillbox self-check --agent claude-code --scope user
+gh skill install rerelurelu/skillbox codex-review --agent claude-code --scope user
+gh skill install rerelurelu/skillbox lean-review --agent claude-code --scope user
 gh skill install rerelurelu/skillbox final-cleanup --agent claude-code --scope user
-gh skill install rerelurelu/skillbox delegating-implementation --agent claude-code --scope user
+gh skill install rerelurelu/skillbox deslop-comments --agent claude-code --scope user
 gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
 gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
 gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --scope user
-gh skill install rerelurelu/skillbox lean-review --agent claude-code --scope user
 ```
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
 
-`cross-review` needs Claude Code 2.1.206+ and the `codex` CLI. For GitHub Copilot CLI install the Copilot-hosted variant instead:
-
-```bash
-gh skill install rerelurelu/skillbox cross-review-copilot --agent github-copilot --scope user
-```
+`codex-review` needs the `codex` CLI.
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
+| [self-check](skills/self-check/SKILL.md) | The author's own pass before review: requirements vs. diff, unintended changes, leftover TODO/debug code, then lint/typecheck/test. No subagents — it answers "did I finish my job", not "is this code correct" |
+| [codex-review](skills/codex-review/SKILL.md) | Runs `codex review` for an independent read-only review — its own defect criteria plus one added aspect, conformance to the project's architecture rules — then the main agent checks each finding itself and decides accept / reject / defer. Fixes the accepted findings whose fix is uniquely determined, and reports everything as one table plus before/after detail for what changed (needs the `codex` CLI) |
 | [deslop-comments](skills/deslop-comments/SKILL.md) | Removes AI-generated slop from Japanese code comments only (comment text and whitespace, nothing else) |
-| [cross-review](skills/cross-review/SKILL.md) | The main agent, acting as Technical Review Lead, spawns up to five tool-restricted role-based reviewer subagents (implementation, security, architecture, maintainability, and plan-alignment when a comparison implementation plan is given) in parallel — each one fetches its own review scope from Git instead of being handed a briefing — and runs Codex CLI itself as an independent cross-check, then triages every finding itself against the implementation plan before fixing and reporting. Reviews uncommitted changes, a pull request by number, or a document by path; for a PR the main agent fetches the base and head OIDs first, so every participant reads the same local snapshot (needs Claude Code 2.1.206+ and the `codex` CLI) |
-| [cross-review-copilot](skills/cross-review-copilot/SKILL.md) | The same review for GitHub Copilot CLI: the host session, acting as Technical Review Lead, runs Codex CLI and argues its findings against a Copilot subagent reviewer (needs the `codex` CLI) |
-| [final-cleanup](skills/final-cleanup/SKILL.md) | Final polish after implementation, cross-review, and lean-review are done: dead-code removal → comment/implementation consistency → `deslop-comments` → project verification (lint/typecheck/test) |
-| [delegating-implementation](skills/delegating-implementation/SKILL.md) | Hands a reviewed implementation plan to a sonnet subagent, keeping the main agent's context free of the read/edit/test loop, then runs a plan-compliance check on the result |
+| [lean-review](skills/lean-review/SKILL.md) | Memorable adapter that runs the `ponytail-review` skill for a simplicity/YAGNI/over-engineering review of finished code, with no simplicity criteria of its own (requires `ponytail-review` to be installed separately) |
+| [final-cleanup](skills/final-cleanup/SKILL.md) | Final polish after implementation, review, and lean-review are done: dead-code removal → comment/implementation consistency → `deslop-comments` → project verification (lint/typecheck/test) |
 | [memo](skills/memo/SKILL.md) | Records tech knowledge, design decisions, domain knowledge, and coding tendencies to a personal knowledge base (`~/dev/knowledge`, Obsidian vault) |
 | [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
 | [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
 | [delegating-via-herdr](skills/delegating-via-herdr/SKILL.md) | Delegates a task to another coding agent in a visible herdr pane, waiting for completion in the background |
-| [lean-review](skills/lean-review/SKILL.md) | Memorable adapter that runs the `ponytail-review` skill for a simplicity/YAGNI/over-engineering review of finished code, with no simplicity criteria of its own (requires `ponytail-review` to be installed separately) |
 
 ## Updating
 
@@ -73,7 +68,7 @@ gh skill update --all
 Pin to a specific version when installing:
 
 ```bash
-gh skill install rerelurelu/skillbox cross-review --pin v1.6.0
+gh skill install rerelurelu/skillbox codex-review --pin v3.0.0
 ```
 
 ## Local Development
@@ -81,7 +76,7 @@ gh skill install rerelurelu/skillbox cross-review --pin v1.6.0
 Test a skill from a local checkout before publishing:
 
 ```bash
-gh skill install /path/to/skillbox cross-review --from-local --agent claude-code --scope user
+gh skill install /path/to/skillbox codex-review --from-local --agent claude-code --scope user
 ```
 
 ## Authoring New Skills

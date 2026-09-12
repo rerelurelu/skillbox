@@ -4,7 +4,7 @@ description: >
   実装・レビュー・simplification対応がすべて完了したコードを最終整理する。dead codeの削除、コメントと実装の整合性確認、
   deslop-commentsによるコメント品質整理を順に行い、最後にlint/typecheck/testなどの検証を実行する。
   「最終クリーンアップ」「final cleanup」「仕上げ処理」「/final-cleanup」と言われたときに使う。
-  cross-reviewとlean-review（simplification判断）への対応が終わり、実装内容そのものは確定しているコードが対象。
+  codex-reviewとlean-review（simplification判断）への対応が終わり、実装内容そのものは確定しているコードが対象。
 user-invocable: true
 argument-hint: "[scope]"
 license: "GPL-3.0"
@@ -14,7 +14,7 @@ license: "GPL-3.0"
 
 実装内容が確定したコードに残った不要物とコメントを整理する。新しい設計判断は行わない。
 
-**このSkillが呼ばないもの**: `cross-review`、`lean-review`、`ponytail-review`。これらはユーザー判断や修正相談を挟む独立工程であり、`final-cleanup` からは実行しない。architecture simplification、YAGNI判断、correctness/security/performanceレビューもこのSkillの対象外。ユーザーが直接 `/final-cleanup` を実行した場合も、これらを自動実行せず自分の責務だけを行う。
+**このSkillが呼ばないもの**: `codex-review`、`lean-review`、`ponytail-review`。これらはユーザー判断や修正相談を挟む独立工程であり、`final-cleanup` からは実行しない。architecture simplification、YAGNI判断、correctness/security/performanceレビューもこのSkillの対象外。ユーザーが直接 `/final-cleanup` を実行した場合も、これらを自動実行せず自分の責務だけを行う。
 
 ## 対象範囲 (scope)
 
