@@ -27,6 +27,12 @@ architecture rules: responsibilities placed in the wrong layer, dependencies
 pointing the wrong way, duplicated implementations of the same rule, and
 changes that contradict the conventions written in AGENTS.md or CLAUDE.md.
 Report architecture deviations as findings in the same format as other findings.
+
+If this change introduces or modifies usage of an external library or framework
+API, verify that the usage is appropriate for the version the repository actually
+resolves in its lockfile. Flag deprecated, discouraged, or outdated patterns when
+a current recommended alternative exists. Skip this when the change touches no
+external API.
 ```
 
 `<レビュー対象>` は、`$ARGUMENTS` の指定があればそれを書く。無ければ `the uncommitted changes in this repository` とする。ブランチや他人の pull request をレビューするときは、その内容を先にチェックアウトしたうえで `the changes on this branch against the base branch <branch>` のように書く。
@@ -37,7 +43,9 @@ Report architecture deviations as findings in the same format as other findings.
 
 Phase 3 の修正まで、ワークツリーを変更しない。
 
-**レビューの観点そのものは書き足さない。** `codex review` は判定条件と優先度の定義を自分で持っている（`~/.codex/skills/.system/review-agent/`）。`approval-policy: never` と `sandbox: read-only` も自動で付く。上のプロンプトが足しているのはアーキテクチャ観点 1 つだけで、それ以外を上書きすると Codex 側が更新されても追従しなくなる。
+**レビューの観点そのものは書き足さない。** `codex review` は判定条件と優先度の定義を自分で持っている（`~/.codex/skills/.system/review-agent/`）。`approval-policy: never` と `sandbox: read-only` も自動で付く。上のプロンプトが足しているのはアーキテクチャ観点と、外部 API に触れたときだけ働くバージョン整合の確認の 2 つだけで、それ以外を上書きすると Codex 側が更新されても追従しなくなる。
+
+バージョン整合の確認は、実装前の `docs-researcher` と役割が違う。`docs-researcher` は実装前に使える選択肢を発見する。ここでの確認は、出来上がった差分がその方法に従えているかを第三者として見るだけである。同じ探索をもう一度やらせない。
 
 出力にはコマンド実行ログが混ざり、最後の指摘ブロックが 2 回出力されることがある。指摘は 1 回分だけ読む。
 
