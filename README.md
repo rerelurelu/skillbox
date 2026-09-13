@@ -43,6 +43,12 @@ Replace `--agent claude-code` with `--agent github-copilot` (or any other suppor
 
 `codex-review` needs the `codex` CLI.
 
+## Subagents
+
+| Agent | Purpose |
+|-------|---------|
+| [docs-researcher](agents/docs-researcher.md) | Version-aware research on an external dependency: pins the version from the lockfile, explores what that version newly offers and what it deprecated, then returns only what the main agent needs to design with. Read-only, and kept out of the main agent's context |
+
 ## Skills
 
 | Skill | Purpose |

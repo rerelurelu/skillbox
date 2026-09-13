@@ -9,6 +9,8 @@ skillbox/
 ├── AGENTS.md                       # This file (repo conventions for agents)
 ├── README.md                       # Human-facing overview
 ├── best-practices/create-skill.md  # Anthropic's authoring guide (reference)
+├── agents/
+│   └── <agent-name>.md             # Subagent definitions
 └── skills/
     └── <skill-name>/
         ├── SKILL.md                # Required entry point
@@ -36,6 +38,14 @@ When creating or editing a skill in this repo, follow these rules. For deeper gu
 - File references must be **one level deep** from `SKILL.md`.
 - Use forward slashes in paths (cross-platform).
 - Use consistent terminology throughout the skill.
+
+### Agent definitions
+
+Agent definitions under `agents/*.md` are registered once, when a Claude Code session starts. **Editing an agent's `tools`, `model`, or other frontmatter does not affect a session that is already running** — the session keeps using the definition it loaded at startup. Verified by measurement: a subagent kept running without a newly added `Write` tool even though the file on disk had it.
+
+After changing `agents/*.md`, reinstall and verify in a **fresh** session.
+
+Keep this directory small. It holds general-purpose subagents for work that is independent and worth isolating from the main agent's context — not one agent per development stage.
 
 ## Validation
 
