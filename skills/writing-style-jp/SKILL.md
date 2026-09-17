@@ -1,9 +1,9 @@
 ---
 name: writing-style-jp
 description: |
-  日本語の技術文章を、その分野を知らない人が読んでも何が起きるか分かる形に書く・直すための規則。抽象語の置き換え例、使わない語の一覧、設計書で追加で守ること、送信前のセルフチェックを含む。
+  日本語の技術文章を、その分野を知らない人が読んでも何が起きるか分かる形に書く・直すための規則。抽象語の置き換え例、使わない語の一覧、設計書や ADR で追加で守ること、送信前のセルフチェックを含む。
+  設計書、ADR、PR 説明、commit メッセージ、コードコメント、README などの日本語の文章を書くとき、または見直すときに使う。
   Triggers on: "文章表現", "文章を直して", "言い回しを直して", "writing style", "/writing-style-jp"
-  Use when: writing or reviewing Japanese prose such as design docs, PR descriptions, commit messages, code comments, READMEs, or technical documentation.
 user-invocable: true
 license: "GPL-3.0"
 ---
@@ -38,7 +38,7 @@ license: "GPL-3.0"
 
 「契約」は Design by Contract という手法の名前を指すときだけ使う。その場合も、初出で「事前条件・事後条件を型やアサーションで書く手法」と説明を添える。手法の話でないなら上の置き換えをする。
 
-## 設計書で追加で守ること
+## 設計書・ADR で追加で守ること
 
 - 主語を人名・システム名・関数名で明示する
 - 必須なら「〜する」、任意なら「〜してもよい」と書く。「〜べき」「〜が望ましい」は使わない
