@@ -37,6 +37,7 @@ gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
 gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
 gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --scope user
+gh skill install rerelurelu/skillbox writing-style-jp --agent claude-code --scope user
 ```
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
@@ -62,6 +63,7 @@ Replace `--agent claude-code` with `--agent github-copilot` (or any other suppor
 | [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
 | [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
 | [delegating-via-herdr](skills/delegating-via-herdr/SKILL.md) | Delegates a task to another coding agent in a visible herdr pane, waiting for completion in the background |
+| [writing-style-jp](skills/writing-style-jp/SKILL.md) | Rules for Japanese technical prose that a reader outside the field can follow: concrete replacements for abstract wording, a list of words to avoid, extra rules for design docs and ADRs, and a pre-send checklist |
 
 ## Updating
 
