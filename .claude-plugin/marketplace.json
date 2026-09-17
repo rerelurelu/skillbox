@@ -9,7 +9,7 @@
       "name": "relubox",
       "source": "./",
       "description": "Personal agent skills: self-check, independent Codex review, cleanup passes, and a knowledge base workflow.",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "author": {
         "name": "rerelurelu"
       },
@@ -25,7 +25,8 @@
         "./skills/memo",
         "./skills/recall",
         "./skills/retro",
-        "./skills/self-check"
+        "./skills/self-check",
+        "./skills/writing-style-jp"
       ]
     }
   ]
