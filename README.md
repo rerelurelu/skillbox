@@ -38,6 +38,7 @@ gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
 gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
 gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --scope user
 gh skill install rerelurelu/skillbox writing-style-jp --agent claude-code --scope user
+gh skill install rerelurelu/skillbox implement --agent claude-code --scope user
 ```
 
 Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
@@ -54,6 +55,7 @@ Replace `--agent claude-code` with `--agent github-copilot` (or any other suppor
 
 | Skill | Purpose |
 |-------|---------|
+| [implement](skills/implement/SKILL.md) | Runs the whole implementation flow in one go, auto-invoked on every code change request (or via `/implement`): implement → `self-check` → `codex-review` (only when the change alters design or implementation approach) → `lean-review` → `final-cleanup` → design-doc polish with `writing-style-jp` and `yomiyasu` (only when a design doc or ADR is in the diff). Items that need a decision are collected and asked once in the final report instead of stopping midway |
 | [self-check](skills/self-check/SKILL.md) | The author's own pass before review: requirements vs. diff, unintended changes, leftover TODO/debug code, then lint/typecheck/test. No subagents — it answers "did I finish my job", not "is this code correct" |
 | [codex-review](skills/codex-review/SKILL.md) | Runs `codex review` for an independent read-only review — its own defect criteria plus one added aspect, conformance to the project's architecture rules — then the main agent checks each finding itself and decides accept / reject / defer. Fixes the accepted findings whose fix is uniquely determined, and reports everything as one table plus before/after detail for what changed (needs the `codex` CLI) |
 | [deslop-comments](skills/deslop-comments/SKILL.md) | Removes AI-generated slop from Japanese code comments only (comment text and whitespace, nothing else) |
