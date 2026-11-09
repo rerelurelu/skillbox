@@ -3,7 +3,7 @@ name: lean-review
 description: |
   Reviews finished code for unnecessary implementation, over-abstraction, and YAGNI violations by delegating to the ponytail-review skill. Reports simplification candidates without editing code.
   Triggers on: "lean review", "simplify review", "over-engineering review", "不要コードを確認", "過剰実装", "YAGNI", "/lean-review".
-  Use when: the user explicitly asks for a lean/simplicity review of code that implementation and codex-review are already done on.
+  Use when: the user explicitly asks for a lean/simplicity review of code that implementation and codex-review are already done on, or when the implement skill runs it as one of its steps.
 user-invocable: true
 argument-hint: "[scope]"
 license: "GPL-3.0"
@@ -31,6 +31,6 @@ Don't collect scope yourself (`git diff`, `git status`, `git ls-files`, etc.) �
 - Don't edit or write code. Reporting the findings is the end of this skill; applying any of them happens in a later turn if the user asks.
 - No findings is a normal, successful result — report it as such, not as a failure.
 - If `ponytail-review` is not installed, say so and stop: "lean-review requires the ponytail-review skill, but it is not available." Don't perform the review yourself as a fallback.
-- Don't check whether `codex-review` has already run or otherwise gate on prior review state — run whenever the user explicitly invokes this skill.
+- Don't check whether `codex-review` has already run or otherwise gate on prior review state — run whenever the user explicitly invokes this skill or the `implement` skill runs it.
 - Don't invoke or depend on `codex-review` in either direction; the two skills stay independent.
 - Scope is code only. Don't extend this skill to implementation plans, architecture/design docs, or whole-repository audits.
