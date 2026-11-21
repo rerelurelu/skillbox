@@ -21,7 +21,7 @@ The plugin has no `version` field, so every pushed commit is an update. Pull it 
 
 | Skill | Purpose |
 |-------|---------|
-| [implement](skills/implement/SKILL.md) | Runs the whole implementation flow in one go, auto-invoked on every code change request (or via `/implement`): implement → `self-check` → `lean-review` → `final-cleanup` → design-doc polish with `writing-style-jp` and `yomiyasu` (only when a design doc or ADR is in the diff). Items that need a decision are collected and asked once in the final report instead of stopping midway |
+| [implement](skills/implement/SKILL.md) | Runs the whole implementation flow in one go, auto-invoked on every code change request (or via `/implement`): implement → `self-check` → `lean-review` → `final-cleanup` → design-doc polish with `writing-style-jp` (only when a design doc or ADR is in the diff). Items that need a decision are collected and asked once in the final report instead of stopping midway |
 | [self-check](skills/self-check/SKILL.md) | The author's own pass before review: requirements vs. diff, unintended changes, leftover TODO/debug code, then lint/typecheck/test. No subagents — it answers "did I finish my job", not "is this code correct" |
 | [deslop-comments](skills/deslop-comments/SKILL.md) | Removes AI-generated slop from Japanese code comments only (comment text and whitespace, nothing else) |
 | [lean-review](skills/lean-review/SKILL.md) | Memorable adapter that runs the `ponytail-review` skill for a simplicity/YAGNI/over-engineering review of finished code, with no simplicity criteria of its own (requires `ponytail-review` to be installed separately) |
