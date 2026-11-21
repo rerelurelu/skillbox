@@ -1,6 +1,6 @@
 # skillbox — Agent Conventions
 
-This repository is a personal collection of [Agent Skills](https://agentskills.io/specification) installable via `gh skill`.
+This repository is a personal collection of [Agent Skills](https://agentskills.io/specification) distributed as a Claude Code plugin.
 
 ## Repository Layout
 
@@ -9,8 +9,6 @@ skillbox/
 ├── AGENTS.md                       # This file (repo conventions for agents)
 ├── README.md                       # Human-facing overview
 ├── best-practices/create-skill.md  # Anthropic's authoring guide (reference)
-├── agents/
-│   └── <agent-name>.md             # Subagent definitions
 └── skills/
     └── <skill-name>/
         ├── SKILL.md                # Required entry point
@@ -39,20 +37,12 @@ When creating or editing a skill in this repo, follow these rules. For deeper gu
 - Use forward slashes in paths (cross-platform).
 - Use consistent terminology throughout the skill.
 
-### Agent definitions
-
-Agent definitions under `agents/*.md` are registered once, when a Claude Code session starts. **Editing an agent's `tools`, `model`, or other frontmatter does not affect a session that is already running** — the session keeps using the definition it loaded at startup. Verified by measurement: a subagent kept running without a newly added `Write` tool even though the file on disk had it.
-
-After changing `agents/*.md`, reinstall and verify in a **fresh** session.
-
-Keep this directory small. It holds general-purpose subagents for work that is independent and worth isolating from the main agent's context — not one agent per development stage.
-
 ## Validation
 
 Always validate before committing:
 
 ```bash
-gh skill publish --dry-run
+claude plugin validate .
 ```
 
 This must pass with zero errors.
@@ -69,11 +59,9 @@ This must pass with zero errors.
 
 ## Distribution
 
-This repository ships through two channels at once. A new skill has to be added to both, or it will be missing from one of them.
+Skills ship only as the `relubox` Claude Code plugin, defined in `.claude-plugin/marketplace.json`.
 
 - New skills: add under `skills/<name>/SKILL.md`
-- Add the skill to the `skills` array in `.claude-plugin/marketplace.json`. That array is the complete list for the plugin — a skill that is not listed is not installed by `/plugin install relubox@skillbox`. Leave a skill out on purpose only when it cannot run under Claude Code
+- Add the skill to the `skills` array in `.claude-plugin/marketplace.json`. That array is the complete list for the plugin — a skill that is not listed is not installed by `/plugin install relubox@skillbox`
 - Update README skill table when adding a new skill
-- Bump `version` in `.claude-plugin/marketplace.json` to match the release tag. Plugin users only receive updates when that field changes
-- Validate both channels: `gh skill publish --dry-run` and `claude plugin validate .`
-- Cut a release with `gh skill publish --tag vX.Y.Z` after merging
+- Do not add a `version` field. Without it, users track commits: every push to `main` is an update, with no tag or release step

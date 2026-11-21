@@ -1,16 +1,12 @@
 # skillbox
 
-Personal Agent Skills for Claude Code, GitHub Copilot, and other AI coding agents.
+Personal Agent Skills for Claude Code.
 
 ## Overview
 
-This repository contains a collection of [Agent Skills](https://agentskills.io/specification) that Relu (rerelurelu) uses across machines. Skills are installable via `gh skill` and auto-trigger based on context, or can be invoked explicitly as slash commands.
+This repository contains a collection of [Agent Skills](https://agentskills.io/specification) that Relu (rerelurelu) uses across machines. Skills are distributed as a Claude Code plugin and auto-trigger based on context, or can be invoked explicitly as slash commands.
 
 ## Installation
-
-Two ways in. They coexist: install whichever fits the agent you are using.
-
-### Claude Code plugin
 
 Installs every skill in one step. Plugin skills are namespaced, so they are invoked as `/relubox:<skill>`.
 
@@ -19,75 +15,18 @@ Installs every skill in one step. Plugin skills are namespaced, so they are invo
 /plugin install relubox@skillbox
 ```
 
-Update with `/plugin marketplace update skillbox`.
-
-Note that Copilot CLI does not read `~/.claude/plugins/`, so a plugin install does not make these skills available there. Use `gh skill` below for Copilot.
-
-### gh skill
-
-Per-skill installs, and the only route for agents other than Claude Code. Install all skills at user scope for Claude Code:
-
-```bash
-gh skill install rerelurelu/skillbox self-check --agent claude-code --scope user
-gh skill install rerelurelu/skillbox codex-review --agent claude-code --scope user
-gh skill install rerelurelu/skillbox lean-review --agent claude-code --scope user
-gh skill install rerelurelu/skillbox final-cleanup --agent claude-code --scope user
-gh skill install rerelurelu/skillbox deslop-comments --agent claude-code --scope user
-gh skill install rerelurelu/skillbox memo --agent claude-code --scope user
-gh skill install rerelurelu/skillbox recall --agent claude-code --scope user
-gh skill install rerelurelu/skillbox retro --agent claude-code --scope user
-gh skill install rerelurelu/skillbox delegating-via-herdr --agent claude-code --scope user
-gh skill install rerelurelu/skillbox writing-style-jp --agent claude-code --scope user
-gh skill install rerelurelu/skillbox implement --agent claude-code --scope user
-```
-
-Replace `--agent claude-code` with `--agent github-copilot` (or any other supported agent) to install for that target instead.
-
-`codex-review` needs the `codex` CLI.
-
-## Subagents
-
-| Agent | Purpose |
-|-------|---------|
-| [docs-researcher](agents/docs-researcher.md) | Version-aware research on an external dependency: pins the version from the lockfile, explores what that version newly offers and what it deprecated, then returns only what the main agent needs to design with. Read-only, and kept out of the main agent's context |
+The plugin has no `version` field, so every pushed commit is an update. Pull it with `/plugin marketplace update skillbox`, or turn on auto-update for this marketplace under **Marketplaces** in `/plugin`.
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
-| [implement](skills/implement/SKILL.md) | Runs the whole implementation flow in one go, auto-invoked on every code change request (or via `/implement`): implement → `self-check` → `codex-review` (only when the change alters design or implementation approach) → `lean-review` → `final-cleanup` → design-doc polish with `writing-style-jp` and `yomiyasu` (only when a design doc or ADR is in the diff). Items that need a decision are collected and asked once in the final report instead of stopping midway |
+| [implement](skills/implement/SKILL.md) | Runs the whole implementation flow in one go, auto-invoked on every code change request (or via `/implement`): implement → `self-check` → `lean-review` → `final-cleanup` → design-doc polish with `writing-style-jp` and `yomiyasu` (only when a design doc or ADR is in the diff). Items that need a decision are collected and asked once in the final report instead of stopping midway |
 | [self-check](skills/self-check/SKILL.md) | The author's own pass before review: requirements vs. diff, unintended changes, leftover TODO/debug code, then lint/typecheck/test. No subagents — it answers "did I finish my job", not "is this code correct" |
-| [codex-review](skills/codex-review/SKILL.md) | Runs `codex review` for an independent read-only review — its own defect criteria plus one added aspect, conformance to the project's architecture rules — then the main agent checks each finding itself and decides accept / reject / defer. Fixes the accepted findings whose fix is uniquely determined, and reports everything as one table plus before/after detail for what changed (needs the `codex` CLI) |
 | [deslop-comments](skills/deslop-comments/SKILL.md) | Removes AI-generated slop from Japanese code comments only (comment text and whitespace, nothing else) |
 | [lean-review](skills/lean-review/SKILL.md) | Memorable adapter that runs the `ponytail-review` skill for a simplicity/YAGNI/over-engineering review of finished code, with no simplicity criteria of its own (requires `ponytail-review` to be installed separately) |
 | [final-cleanup](skills/final-cleanup/SKILL.md) | Final polish after implementation, review, and lean-review are done: dead-code removal → comment/implementation consistency → `deslop-comments` → project verification (lint/typecheck/test) |
-| [memo](skills/memo/SKILL.md) | Records tech knowledge, design decisions, domain knowledge, and coding tendencies to a personal knowledge base (`~/dev/knowledge`, Obsidian vault) |
-| [recall](skills/recall/SKILL.md) | Searches the knowledge base and surfaces past knowledge relevant to the current work |
-| [retro](skills/retro/SKILL.md) | Generates a retrospective report (strengths, tendencies, weaknesses) from the knowledge base |
-| [delegating-via-herdr](skills/delegating-via-herdr/SKILL.md) | Delegates a task to another coding agent in a visible herdr pane, waiting for completion in the background |
 | [writing-style-jp](skills/writing-style-jp/SKILL.md) | Rules for Japanese technical prose that a reader outside the field can follow: concrete replacements for abstract wording, a list of words to avoid, extra rules for design docs and ADRs, and a pre-send checklist |
-
-## Updating
-
-Update all installed skills to the latest version:
-
-```bash
-gh skill update --all
-```
-
-Pin to a specific version when installing:
-
-```bash
-gh skill install rerelurelu/skillbox codex-review --pin v3.0.0
-```
-
-## Local Development
-
-Test a skill from a local checkout before publishing:
-
-```bash
-gh skill install /path/to/skillbox codex-review --from-local --agent claude-code --scope user
-```
 
 ## Authoring New Skills
 

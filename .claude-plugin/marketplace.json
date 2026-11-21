@@ -1,6 +1,6 @@
 {
   "name": "skillbox",
-  "description": "rerelurelu's personal agent skills, installable as one Claude Code plugin or individually with gh skill.",
+  "description": "rerelurelu's personal agent skills, installable as one Claude Code plugin.",
   "owner": {
     "name": "rerelurelu"
   },
@@ -8,8 +8,7 @@
     {
       "name": "relubox",
       "source": "./",
-      "description": "Personal agent skills: self-check, independent Codex review, cleanup passes, and a knowledge base workflow.",
-      "version": "3.2.0",
+      "description": "Personal agent skills: an implementation workflow with self-check, lean review, and cleanup passes, plus Japanese writing rules.",
       "author": {
         "name": "rerelurelu"
       },
@@ -17,15 +16,10 @@
       "license": "GPL-3.0",
       "strict": false,
       "skills": [
-        "./skills/codex-review",
-        "./skills/delegating-via-herdr",
         "./skills/deslop-comments",
         "./skills/final-cleanup",
         "./skills/implement",
         "./skills/lean-review",
-        "./skills/memo",
-        "./skills/recall",
-        "./skills/retro",
         "./skills/self-check",
         "./skills/writing-style-jp"
       ]
