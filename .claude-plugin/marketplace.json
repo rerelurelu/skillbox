@@ -8,7 +8,7 @@
     {
       "name": "relubox",
       "source": "./",
-      "description": "Personal agent skills: an implementation workflow with self-check, lean review, and cleanup passes, plus Japanese writing rules.",
+      "description": "Personal agent skills: the qstack implementation workflow with arena, adversarial review, comment and overengineering passes, plus Japanese writing rules.",
       "author": {
         "name": "rerelurelu"
       },
@@ -23,12 +23,7 @@
         "./skills/herdr-panes",
         "./skills/no-overengineering",
         "./skills/technical-writing",
-        "./skills/unslop",
-        "./skills/deslop-comments",
-        "./skills/final-cleanup",
-        "./skills/lean-review",
-        "./skills/self-check",
-        "./skills/writing-style-jp"
+        "./skills/unslop"
       ],
       "agents": [
         "./agents/comment-arbiter.md",
