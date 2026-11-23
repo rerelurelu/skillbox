@@ -16,12 +16,21 @@
       "license": "GPL-3.0",
       "strict": false,
       "skills": [
+        "./skills/qstack",
+        "./skills/arena",
+        "./skills/interrogate",
+        "./skills/no-comments",
+        "./skills/herdr-panes",
+        "./skills/no-overbuild",
         "./skills/deslop-comments",
         "./skills/final-cleanup",
-        "./skills/implement",
         "./skills/lean-review",
         "./skills/self-check",
         "./skills/writing-style-jp"
+      ],
+      "agents": [
+        "./agents/comment-reviewer.md",
+        "./agents/verifier.md"
       ]
     }
   ]
