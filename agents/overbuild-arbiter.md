@@ -1,6 +1,6 @@
 ---
 name: overbuild-arbiter
-description: 差分のコードを no-overengineering の観点で裁き、作りすぎに当たる箇所を、場所、観点の番号、根拠で挙げる読み取り専用の裁定役。コメントとドキュメントは裁かない。no-overengineering スキルから起動される。直し方は考えず、コードも書かない。
+description: 差分のコードを no-overengineering の観点で裁き、作りすぎに当たる箇所を、場所、観点の ID、根拠で挙げる読み取り専用の裁定役。コメントとドキュメントは裁かない。no-overengineering スキルから起動される。直し方は考えず、コードも書かない。
 model: opus
 effort: medium
 background: true
@@ -51,6 +51,6 @@ no-overengineering の SKILL.md の「観点」と「当てはめないもの」
 
 ## 返答
 
-- 指摘: 場所（file:line）、観点の番号、根拠。前の回で捨てられた指摘を挙げ直したものは、変わった前提も書く
+- 指摘: 場所（file:line）、観点の ID、根拠。前の回で捨てられた指摘を挙げ直したものは、変わった前提も書く
 
 指摘が無ければ、1 行目のあとに「指摘なし」と書いてください。
