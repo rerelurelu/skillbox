@@ -36,7 +36,7 @@ license: "GPL-3.0"
    - 1 つの状態に持ち主が 1 つ
    - 1 つの作業にやり方が 1 つ
    - 呼び出す側が知るべきことが一番少ない
-   - no-overbuild の SKILL.md（`../no-overbuild/SKILL.md`）の、「設計でも使う」が「使う」の観点に当たらない
+   - no-overengineering の SKILL.md（`../no-overengineering/SKILL.md`）の、「設計でも使う」が「使う」の観点に当たらない
 2. 候補ごとの worktree を HEAD から作る。前の回の worktree が同じ場所に残っていたら（手順 7 からのやり直しなど）、`git worktree remove --force` で消してから作る。置き場所は `${TMPDIR}/arena/<リポジトリ名>/candidate-<a|b|c>`。どの候補にどの文字を当てたかは親だけが記録する。フォルダ名にモデル名を入れない（審査役に渡すパスからモデルが分かるため）。設計の arena でも作る（候補がコードを読むため）。
 3. 3 体を同時に起動して、同じ依頼文を送る。依頼文には次を入れる。
    - 課題と意図

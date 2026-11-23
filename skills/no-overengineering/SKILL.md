@@ -1,5 +1,5 @@
 ---
-name: no-overbuild
+name: no-overengineering
 description: |
   作りすぎ（要件に無いケースへの備え、使われない拡張、1 つしか実装の無い抽象化、既存コードの作り直し、余計な防御、要らないコメントなど）を見分ける 17 の観点と、観点に当たっても消さないものを定める。各観点は「当たる」と言える根拠を持つ。
   実装役が書くときに守る規則として、また設計と arena の採点基準として、qstack と arena から読まれる。
@@ -7,7 +7,7 @@ disable-model-invocation: true
 license: "GPL-3.0"
 ---
 
-# No overbuild
+# No overengineering
 
 実装役が書くときに守る規則。設計と arena の採点にも使う。各観点は「当たる」と言える根拠を持つ。根拠を示せないものは観点に当たらない。
 

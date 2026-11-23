@@ -21,7 +21,7 @@
         "./skills/interrogate",
         "./skills/no-comments",
         "./skills/herdr-panes",
-        "./skills/no-overbuild",
+        "./skills/no-overengineering",
         "./skills/deslop-comments",
         "./skills/final-cleanup",
         "./skills/lean-review",

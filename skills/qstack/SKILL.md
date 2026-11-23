@@ -28,7 +28,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 | arena | `../arena/SKILL.md` | 設計が大きいか割れるとき、実装の形が割れるとき |
 | no-comments | `../no-comments/SKILL.md` | 実装と修正の回のあと |
 | interrogate | `../interrogate/SKILL.md` | 検証のあと |
-| no-overbuild | `../no-overbuild/SKILL.md` | 実装役が書くときの規則、設計の基準 |
+| no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準 |
 | writing-style-jp | `../writing-style-jp/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告の文章 |
 
 subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントのレビュー役は `relubox:comment-reviewer`（no-comments が起動する）。
