@@ -1,7 +1,7 @@
 ---
 name: qstack
 description: |
-  新規実装、機能追加、機能修正の依頼を、認識合わせから設計、実装、検証、レビュー、報告まで止まらずに進める。メインの Claude が進行と判断を持ち、実装は Herdr のペインで動く Codex に、検証とレビューは Claude の subagent と別ベンダーのエージェントに任せる。
+  新規実装、機能追加、機能修正の依頼を認識合わせから設計、実装、検証、レビュー、報告まで止まらずに進める。メインの Claude が進行と判断を持ち、実装は Herdr のペインで動く Codex に、検証とレビューは Claude の subagent と別ベンダーのエージェントに任せる。
   `/qstack` で明示的に呼ばれたときだけ使う。バグ修正、調査だけの依頼、コードを変えない文書の変更には使わない。
   Triggers on: "/qstack"
 disable-model-invocation: true
@@ -32,7 +32,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 | technical-writing | `../technical-writing/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告 |
 | unslop | `../unslop/SKILL.md` | ユーザーが判断に使う文と、成果物の文章 |
 
-文章を書くときは、工程と役割に関係なく次に従う。
+文章を書くときは工程と役割に関係なく次に従う。
 
 - ユーザーが判断に使う文（認識合わせ、確認したいこと、止まるときの説明）と成果物の文章には unslop を当てる。返答の口調は AGENTS.md に従う。実装役の報告には当てない
 - コメント、ドキュメント、コミットメッセージ、報告は technical-writing に従う
@@ -107,7 +107,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
   - メッセージは `technical-writing` に従う。最後のまとめ直しでそのまま残すため、作業用の仮のメッセージにしない
   - 修正の回で、既存の単位を直した変更は `git commit --fixup=<その単位のコミット>` にする。新しい単位の変更は普通にコミットする
   - コミットのあとに `git status --short` を見る。どのコミットにも入らなかったファイルが残っていたら、中身を見て決める。qstack の変更の一部ならコミットに入れる。実行でできた生成物（`__pycache__`、ビルドの出力など）なら入れずに、報告の「工程の結果」に書く
-- arena と interrogate が使う worktree は、それぞれのスキルが作る。qstack は報告のあとに interrogate の worktree を消す。
+- arena と interrogate が使う worktree はそれぞれのスキルが作る。qstack は報告のあとに interrogate の worktree を消す。
 - 報告の前に、開始時のコミットより後のコミットだけをまとめ直す。`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <開始時のコミット>` で、fixup コミットを元の単位のコミットに畳む。畳んだあとの各コミットが単独で成り立つ（そのコミットの時点でテストが通る）ことを確かめる。成り立たないコミットがあれば、前後のコミットとまとめる。
 - 開始時のコミットより前のコミットには触らない。push しない。
 
