@@ -1,7 +1,7 @@
 ---
 name: no-comments
 description: |
-  差分のコメントを comment-arbiter の subagent に裁かせ、消すコメントと、コメントに頼らずコードで表すべき箇所（OVERRULED）の一覧を作る。指摘を点検して、受け入れたものを直す（または呼び出し元に直させる）。
+  差分のコメントを comment-arbiter の subagent に裁かせ、消すコメントと、コメントに頼らずコードで表すべき箇所（OVERRULED）の一覧を作る。指摘を点検して受け入れたものを直す（または呼び出し元に直させる）。
   qstack が実装のあとに呼ぶ。`/no-comments` で単独でも使える。
 disable-model-invocation: true
 user-invocable: true

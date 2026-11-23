@@ -41,7 +41,7 @@ subagent の定義はプラグインの `agents/` にある。検証役は `relu
 
 ## 始める前の確認
 
-1. 依頼の種類を決めて、playbook を選ぶ。
+1. 依頼の種類を決めて playbook を選ぶ。
 
    | 依頼 | playbook |
    |---|---|
@@ -58,9 +58,9 @@ subagent の定義はプラグインの `agents/` にある。検証役は `relu
 
 4. `git rev-parse HEAD` の値を「開始時のコミット」として記録する。
 
-5. playbook の手順を todo リストに写して、上から進める。
+5. playbook の手順を todo リストに写して上から進める。
 
-メインの effort は high を前提にする。Claude Code の effort が high 未満なら、最初の返信で 1 行だけ伝えて、そのまま進める。
+メインの effort は high を前提にする。Claude Code の effort が high 未満なら、最初の返信で 1 行だけ伝えてそのまま進める。
 
 ## 止まる場面
 
@@ -98,7 +98,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 - 文章を書く役割には `unslop` と `technical-writing` の SKILL.md の絶対パスと「コメントとドキュメントは technical-writing に従い、仕上げに unslop を当てる」
 - 「git の状態を変えるコマンド（commit、stash、checkout、reset、branch、rebase）は使わない」。worktree は stash やブランチをほかの作業ツリーと共有するため、どの役割にも入れる
 
-スキルの絶対パスはこのファイルのパスから求めて、依頼文に書く。
+スキルの絶対パスはこのファイルのパスから求めて依頼文に書く。
 
 ## git
 

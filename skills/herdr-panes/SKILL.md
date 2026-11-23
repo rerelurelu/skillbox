@@ -1,7 +1,7 @@
 ---
 name: herdr-panes
 description: |
-  Herdr のアプリで、Codex（`codex`）と Antigravity（`agy`）を別ペインで動かすための手順。ペインを開く位置、起動直後の確認画面の処理、会話のリセット、依頼の送り方、完了の待ち方、結果の読み方、後片付けを定める。
+  Herdr のアプリで Codex（`codex`）と Antigravity（`agy`）を別ペインで動かすための手順。ペインを開く位置、起動直後の確認画面の処理、会話のリセット、依頼の送り方、完了の待ち方、結果の読み方、後片付けを定める。
   qstack、arena、interrogate がペインを使うときに読む。単独では使わない。
 disable-model-invocation: true
 license: "GPL-3.0"
