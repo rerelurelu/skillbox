@@ -31,7 +31,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 | no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準 |
 | writing-style-jp | `../writing-style-jp/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告の文章 |
 
-subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントのレビュー役は `relubox:comment-reviewer`（no-comments が起動する）。
+subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントの裁定役は `relubox:comment-arbiter`（no-comments が起動する）。
 
 ## 始める前の確認
 
@@ -134,7 +134,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 |---|---|
 | 設計 | arena あり／なし |
 | 実装 | 修正の回 N 回、エスカレーションあり／なし |
-| コメントのレビュー | 指摘 N 件: 適用 a |
+| コメントのレビュー | 消したコメント N 件、OVERRULED M 件: 直した a、直さなかった b（理由） |
 | 検証 | 完了条件 N 件中 VERIFIED a |
 | 攻撃レビュー | 指摘 N 件: 再現できた a、捨てた b（攻撃役ごとの捨てた件数と理由） |
 | コミット | <まとめ直した後のコミット一覧> |

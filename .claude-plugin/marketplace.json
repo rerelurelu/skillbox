@@ -29,7 +29,7 @@
         "./skills/writing-style-jp"
       ],
       "agents": [
-        "./agents/comment-reviewer.md",
+        "./agents/comment-arbiter.md",
         "./agents/verifier.md"
       ]
     }
