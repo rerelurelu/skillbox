@@ -22,6 +22,8 @@
         "./skills/no-comments",
         "./skills/herdr-panes",
         "./skills/no-overengineering",
+        "./skills/technical-writing",
+        "./skills/unslop",
         "./skills/deslop-comments",
         "./skills/final-cleanup",
         "./skills/lean-review",

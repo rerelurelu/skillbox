@@ -57,7 +57,7 @@ Feature Progress:
 
 ## 書くときの規則
 - 作りすぎの基準: <no-overengineering の SKILL.md の絶対パス> を読み、表のすべての観点に当たる書き方をしない。「当てはめないもの」に当たるものは消さない
-- コメントとドキュメントは <writing-style-jp の SKILL.md の絶対パス> の規則で書く
+- コメントとドキュメントは <technical-writing の SKILL.md の絶対パス> に従い、仕上げに <unslop の SKILL.md の絶対パス> を当てる
 - 終える前に、変更全体を no-overengineering に照らして見直し、当たるものを直す。変えた関数名、型名、設定キー、コマンド名をリポジトリ全体で検索し、古いままのコメントとドキュメントも直す
 - プロジェクトにある lint、typecheck、関連するテストを実行する。実行方法は package.json、build.gradle、Makefile などの実行定義、AGENTS.md、README の順に探す
 

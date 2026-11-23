@@ -29,7 +29,13 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 | no-comments | `../no-comments/SKILL.md` | 実装と修正の回のあと |
 | interrogate | `../interrogate/SKILL.md` | 検証のあと |
 | no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準 |
-| writing-style-jp | `../writing-style-jp/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告の文章 |
+| technical-writing | `../technical-writing/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告 |
+| unslop | `../unslop/SKILL.md` | ユーザーが判断に使う文と、成果物の文章 |
+
+文章を書くときは、工程と役割に関係なく次に従う。
+
+- ユーザーが判断に使う文（認識合わせ、確認したいこと、止まるときの説明）と成果物の文章には unslop を当てる。返答の口調は AGENTS.md に従う。実装役の報告には当てない
+- コメント、ドキュメント、コミットメッセージ、報告は technical-writing に従う
 
 subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントの裁定役は `relubox:comment-arbiter`（no-comments が起動する）。
 
@@ -89,7 +95,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 - 「スキルは使わずに作業する」
 - 「結果は `=== RESULT ===` の行から書き始め、`=== END ===` の行で終える」（ペインの場合。herdr-panes の「依頼、完了の待ち方、結果の読み方」）
 - 「結果は最後の返答にすべて書く。メッセージでは送らない」（subagent の場合）
-- 文章を書く役割には `writing-style-jp` の SKILL.md の絶対パスと「コメントとドキュメントはこの規則で書く」
+- 文章を書く役割には `unslop` と `technical-writing` の SKILL.md の絶対パスと「コメントとドキュメントは technical-writing に従い、仕上げに unslop を当てる」
 - 「git の状態を変えるコマンド（commit、stash、checkout、reset、branch、rebase）は使わない」。worktree は stash やブランチをほかの作業ツリーと共有するため、どの役割にも入れる
 
 スキルの絶対パスはこのファイルのパスから求めて、依頼文に書く。
@@ -98,7 +104,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 
 - コミットするのはメインだけ。実装役が仕事を終えるたびに（実装、コメントのレビューの適用、修正の回、エスカレーション先の修正）、実装役の報告の「コミットの単位」に沿ってコミットする。コミットの数は増えてもよい。
   - 単位ごとに、ファイルをパスで指定して入れる（`git add <path>`）。`git add -A` と `git add .` は使わない
-  - メッセージはそのリポジトリの書き方に合わせ、`writing-style-jp` に従う。最後のまとめ直しでそのまま残すため、作業用の仮のメッセージにしない
+  - メッセージは `technical-writing` に従う。最後のまとめ直しでそのまま残すため、作業用の仮のメッセージにしない
   - 修正の回で、既存の単位を直した変更は `git commit --fixup=<その単位のコミット>` にする。新しい単位の変更は普通にコミットする
   - コミットのあとに `git status --short` を見る。どのコミットにも入らなかったファイルが残っていたら、中身を見て決める。qstack の変更の一部ならコミットに入れる。実行でできた生成物（`__pycache__`、ビルドの出力など）なら入れずに、報告の「工程の結果」に書く
 - arena と interrogate が使う worktree は、それぞれのスキルが作る。qstack は報告のあとに interrogate の worktree を消す。
@@ -146,4 +152,4 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
    - B: <案> — <選んだときの挙動>
 ```
 
-証拠の欄にはコマンドと出力の要点だけを書く。出力の全文はユーザーに求められたら出す。報告の文章は `writing-style-jp` に従う。
+証拠の欄にはコマンドと出力の要点だけを書く。出力の全文はユーザーに求められたら出す。報告の文章は `technical-writing` に従う。
