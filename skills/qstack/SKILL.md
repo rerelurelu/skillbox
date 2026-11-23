@@ -28,7 +28,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 | arena | `../arena/SKILL.md` | 設計が大きいか割れるとき、実装の形が割れるとき |
 | no-comments | `../no-comments/SKILL.md` | 実装と修正の回のあと。コメントの基準 |
 | interrogate | `../interrogate/SKILL.md` | 検証のあと |
-| no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準 |
+| no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準。実装と修正の回のあとのレビュー |
 | technical-writing | `../technical-writing/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告 |
 | unslop | `../unslop/SKILL.md` | ユーザーが判断に使う文と、成果物の文章 |
 
@@ -37,7 +37,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 - ユーザーが判断に使う文（認識合わせ、確認したいこと、止まるときの説明）と成果物の文章には unslop を当てる。返答の口調は AGENTS.md に従う。実装役の報告には当てない
 - コメント、ドキュメント、コミットメッセージ、報告は technical-writing に従う
 
-subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントの裁定役は `relubox:comment-arbiter`（no-comments が起動する）。
+subagent の定義はプラグインの `agents/` にある。検証役は `relubox:verifier`、コメントの裁定役は `relubox:comment-arbiter`（no-comments が起動する）、作りすぎの裁定役は `relubox:overbuild-arbiter`（no-overengineering が起動する）。
 
 ## 始める前の確認
 
@@ -80,7 +80,7 @@ subagent の定義はプラグインの `agents/` にある。検証役は `relu
 | 実装役 | Codex `gpt-6.2-sol` | high | ペイン `sol` |
 | 実装のエスカレーション先 | Codex `gpt-6.2-astra` | high | ペイン `astra-fix` |
 | 検証役 | Opus 5.5 | medium | subagent `relubox:verifier` |
-| arena、コメントのレビュー、攻撃レビュー | 各スキルに書いてある | 各スキルに書いてある | 各スキルに書いてある |
+| arena、コメントと作りすぎのレビュー、攻撃レビュー | 各スキルに書いてある | 各スキルに書いてある | 各スキルに書いてある |
 
 ペインは herdr-panes に従って開く。run には開始時のコミットの先頭 7 文字を使う。`sol` と `astra-fix` は Codex（書き込みあり）の起動コマンドで、作業フォルダはリポジトリの作業ツリー。
 
@@ -102,7 +102,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 
 ## git
 
-- コミットするのはメインだけ。実装役が仕事を終えるたびに（実装、コメントのレビューの適用、修正の回、エスカレーション先の修正）、実装役の報告の「コミットの単位」に沿ってコミットする。コミットの数は増えてもよい。
+- コミットするのはメインだけ。実装役が仕事を終えるたびに（実装、コメントと作りすぎのレビューの適用、修正の回、エスカレーション先の修正）、実装役の報告の「コミットの単位」に沿ってコミットする。コミットの数は増えてもよい。
   - 単位ごとに、ファイルをパスで指定して入れる（`git add <path>`）。`git add -A` と `git add .` は使わない
   - メッセージは `technical-writing` に従う。最後のまとめ直しでそのまま残すため、作業用の仮のメッセージにしない
   - 修正の回で、既存の単位を直した変更は `git commit --fixup=<その単位のコミット>` にする。新しい単位の変更は普通にコミットする
@@ -140,7 +140,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 |---|---|
 | 設計 | arena を回した、または回していない |
 | 実装 | 修正の回 N 回、エスカレーションした、またはしていない |
-| コメントのレビュー | 消したコメント N 件、OVERRULED M 件: 直した a、直さなかった b（理由） |
+| コメントと作りすぎのレビュー | 消したコメント N 件、書き直した記述 K 件、OVERRULED M 件、作りすぎの指摘 P 件: 直した a、直さなかった b（理由）、逆の向きの指摘とぶつかって捨てた c |
 | 検証 | 完了条件 N 件中 VERIFIED a |
 | 攻撃レビュー | 指摘 N 件: 再現できた a、捨てた b（攻撃役ごとの捨てた件数と理由） |
 | コミット | <まとめ直した後のコミット一覧> |

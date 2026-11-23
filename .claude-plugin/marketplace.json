@@ -32,6 +32,7 @@
       ],
       "agents": [
         "./agents/comment-arbiter.md",
+        "./agents/overbuild-arbiter.md",
         "./agents/verifier.md"
       ]
     }
