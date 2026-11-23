@@ -29,7 +29,7 @@ license: "GPL-3.0"
 
 ## 手順
 
-1. 攻撃役ごとの worktree を HEAD から用意する。置き場所は `${TMPDIR}/interrogate/<リポジトリ名>/<役>`。すでにあれば `git -C <worktree> checkout --detach HEAD のコミット` で合わせる。無ければ `git worktree add --detach <path> <コミット>` で作る。
+1. 攻撃役ごとの worktree を HEAD から用意する。置き場所は `${TMPDIR}/interrogate/<リポジトリ名>/<役>`。すでにあれば `git -C <worktree> checkout --detach <HEAD のコミット>` で合わせる。無ければ `git worktree add --detach <path> <コミット>` で作る。
 2. 3 体に同じ依頼文を送る。ペインの作業フォルダはそれぞれの worktree。
 
 ```

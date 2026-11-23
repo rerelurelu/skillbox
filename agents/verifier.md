@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: 変更が完了条件を満たすかを、実物を動かして完了条件ごとに VERIFIED / NOT VERIFIED / INCONCLUSIVE で判定する読み取り専用の検証役。qstack から起動される。実装の経緯は受け取らない。
+description: 変更が完了条件を満たすかを、実物を動かして完了条件ごとに VERIFIED、NOT VERIFIED、INCONCLUSIVE のどれかで判定する読み取り専用の検証役。qstack から起動される。実装の経緯は受け取らない。
 model: opus
 effort: medium
 background: true

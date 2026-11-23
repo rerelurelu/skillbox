@@ -58,8 +58,8 @@ license: "GPL-3.0"
 - 同じタブに、`hp.run` と `hp.role` が同じ生きたペインがあれば、新しく開かずに使う。`hp.run` が違うペイン（前の作業の残り）は使わない。
 - 使う前に、`hc get <t> --json` の状態が `working` でないことを確かめる。
 - 前の会話を消してから依頼する。コマンドは `hc keys` で 1 文字ずつ打つ。`hc send` の文は `<hc from=…>` で包まれて届き、コマンドとして扱われない。
-  - Codex: `hc keys <t> / n e w` → `hc keys <t> enter` → 「Where should the new conversation run?」が出たら `hc keys <t> enter`（Use current Git worktree）
-  - Antigravity: `hc keys <t> / c l e a r` → `hc keys <t> enter`
+  - Codex: `hc keys <t> / n e w` を打ち、`hc keys <t> enter` を送る。「Where should the new conversation run?」が出たら、`hc keys <t> enter` で Use current Git worktree を選ぶ
+  - Antigravity: `hc keys <t> / c l e a r` を打ち、`hc keys <t> enter` を送る
 
 ## 依頼、完了の待ち方、結果の読み方
 
