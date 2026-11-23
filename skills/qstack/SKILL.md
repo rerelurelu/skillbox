@@ -26,7 +26,7 @@ playbook の中でスキル名が出てきたら、次の SKILL.md を読んで�
 |---|---|---|
 | herdr-panes | `../herdr-panes/SKILL.md` | ペインを開く、依頼する、待つ、読む、閉じる |
 | arena | `../arena/SKILL.md` | 設計が大きいか割れるとき、実装の形が割れるとき |
-| no-comments | `../no-comments/SKILL.md` | 実装と修正の回のあと |
+| no-comments | `../no-comments/SKILL.md` | 実装と修正の回のあと。コメントの基準 |
 | interrogate | `../interrogate/SKILL.md` | 検証のあと |
 | no-overengineering | `../no-overengineering/SKILL.md` | 実装役が書くときの規則、設計の基準 |
 | technical-writing | `../technical-writing/SKILL.md` | コメント、ドキュメント、コミットメッセージ、報告 |
