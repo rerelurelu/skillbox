@@ -18,15 +18,19 @@ license: "GPL-3.0"
 
 ## 起動コマンド
 
-`herdr-app do pane.split` の `--argv` に JSON で渡す。`<dir>` はペインが作業するフォルダの絶対パス。
+ペインは必ず付属の起動スクリプト [scripts/open-pane.mjs](scripts/open-pane.mjs) で開く。`herdr-app do pane.split` を直接呼ばない。`<dir>` はペインが作業するフォルダの絶対パス、`<script>` はこのファイルのフォルダから見た `scripts/open-pane.mjs` の絶対パス。
 
-| 種類 | `--argv` |
+| 種類 | 実行コマンド |
 |---|---|
-| Codex（書き込みあり） | `["codex","--no-daemon","-C","<dir>","-m","<model>","-c","model_reasoning_effort=<effort>","-c","sandbox_workspace_write.network_access=true","-s","workspace-write","-a","never"]` |
-| Antigravity | `["sh","-c","cd '<dir>' && exec agy --model <model>"]` |
+| Codex（書き込みあり） | `node <script> --tool codex --dir <dir> --model <model> --effort <effort> --direction <right\|down> --pane <pane>` |
+| Antigravity | `node <script> --tool agy --dir <dir> --model <model> --direction <right\|down> --pane <pane>` |
 
-- Codex は `--no-daemon` を付ける。付けないと、Codex のコマンドが Herdr の外で動く
+起動スクリプトは次のガードレールを自動で付ける。
+
+- AWS 認証の環境変数を無効化する（`AWS_PROFILE` などを `unset`、`AWS_CONFIG_FILE=/dev/null`、`AWS_SHARED_CREDENTIALS_FILE=/dev/null`、`AWS_EC2_METADATA_DISABLED=true`）。環境変数の無効化は誤操作を防ぐためのもので、意図的な回避はネットワーク遮断とサンドボックスで防ぐ
+- Codex は `--no-daemon`、`workspace-write`、`-a never`、`sandbox_workspace_write.network_access=false` で起動する。`--no-daemon` を付けないと Codex のコマンドが Herdr の外で動く。ユーザーから明示的な指示が無い限り `--online` は付けない
 - Codex が書き込めるのは `<dir>` の中だけ。`<dir>` が変わるなら、ペインを開き直す
+- Antigravity は `--sandbox` と `--settings '{"allowNonWorkspaceAccess":false}'` を付けて起動する
 - Antigravity の effort はモデル名に含める（例: `gemini-4-neon-high`）
 
 ## 開く位置
@@ -35,10 +39,10 @@ license: "GPL-3.0"
 
 1. 自分のペインの ID を調べる。`herdr-app ls` の出力から、`terminal` が `$HC_TERMINAL_ID` と同じ項目の `pane` を取る。同じタブのターミナルの一覧もこのとき取っておく。
 2. 同じタブの中で、ラベル `hp.col` を持つ生きたターミナルを `hc get <t> --json` で集める。
-3. `hp.col` が一番大きい列（`<n>`）を見る。
-   - 列が無い: `herdr-app do pane.split --direction right --pane <メインのペイン> --argv '<JSON>'`。ラベルは `hp.col=1 hp.slot=top`
-   - 列 `<n>` に `top` しか無い: その `top` のペインを `--direction down` で割る。ラベルは `hp.col=<n> hp.slot=bottom`
-   - 列 `<n>` に `top` と `bottom` がある: メインのペインを `--direction right` で割る。ラベルは `hp.col=<n+1> hp.slot=top`。割る前と後に「メインの幅を保つ」を行う
+3. `hp.col` が一番大きい列（`<n>`）を見る。いずれの分岐でも `scripts/open-pane.mjs` を使って開く。
+   - 列が無い: `scripts/open-pane.mjs` に `--direction right --pane <メインのペイン>` を渡して開く。ラベルは `hp.col=1 hp.slot=top`
+   - 列 `<n>` に `top` しか無い: `scripts/open-pane.mjs` に `--direction down --pane <top のペイン>` を渡して開く。ラベルは `hp.col=<n> hp.slot=bottom`
+   - 列 `<n>` に `top` と `bottom` がある: `scripts/open-pane.mjs` に `--direction right --pane <メインのペイン>` を渡して開く。ラベルは `hp.col=<n+1> hp.slot=top`。割る前と後に「メインの幅を保つ」を行う
 4. 開いたら `hc label <t> hp.run=<run> hp.role=<role> hp.col=<列> hp.slot=<top|bottom>` を付ける。
 
 ### メインの幅を保つ
