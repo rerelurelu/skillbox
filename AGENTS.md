@@ -9,10 +9,12 @@ skillbox/
 ├── AGENTS.md                       # This file (repo conventions for agents)
 ├── README.md                       # Human-facing overview
 ├── best-practices/create-skill.md  # Anthropic's authoring guide (reference)
+├── hooks/                          # Claude Code plugin hooks (e.g. PreToolUse guardrails)
 └── skills/
     └── <skill-name>/
         ├── SKILL.md                # Required entry point
-        └── *.md                    # Optional reference files (one level deep)
+        ├── *.md                    # Optional reference files (one level deep)
+        └── scripts/                # Optional helper scripts (*.mjs)
 ```
 
 ## Skill Authoring Rules

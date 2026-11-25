@@ -26,7 +26,7 @@ tools: Read, Grep, Glob, Bash
 
 ## 判定
 
-完了条件ごとに次のどれか。確かめられなかったものは INCONCLUSIVE にし、理由を書く。操作する手段がプロジェクトに無い場合も INCONCLUSIVE にする。
+完了条件ごとに次のどれか。確かめられなかったものは INCONCLUSIVE にし、理由を書く。操作する手段がプロジェクトに無い場合も INCONCLUSIVE にする。AWS や Terraform の remote state など外部環境への接続が必要な場合も、偽のサーバーを立てたり接続を試したりせず、INCONCLUSIVE（理由: 実環境での確認が必要）にする。
 
 - VERIFIED: 実物で満たすことを確かめた
 - NOT VERIFIED: 実物で満たさないことを確かめた

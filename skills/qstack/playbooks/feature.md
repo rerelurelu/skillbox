@@ -114,4 +114,4 @@ Feature Progress:
 
 1. SKILL.md の「git」に従ってコミットをまとめ直す。
 2. SKILL.md の「報告」の形で報告する。
-3. 今回の作業で開いたペインを閉じ（herdr-panes の「後片付け」）、interrogate の worktree を `git worktree remove --force` で消す。
+3. 今回の作業で開いたペインを閉じ（herdr-panes の「後片付け」）、interrogate のスナップショット（`${TMPDIR}/interrogate/<リポジトリ名>`）を `rm -rf` で消す。

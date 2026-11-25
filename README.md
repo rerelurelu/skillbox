@@ -17,6 +17,36 @@ Installs every skill in one step. Plugin skills are namespaced, so they are invo
 
 The plugin has no `version` field, so every pushed commit is an update. Pull it with `/plugin marketplace update skillbox`, or turn on auto-update for this marketplace under **Marketplaces** in `/plugin`.
 
+## Local Guardrails Setup
+
+The plugin ships a Claude Code `PreToolUse` hook (`hooks/hooks.json` + `hooks/block-dangerous-commands.mjs`) that automatically blocks `aws`, `git push`, `just apply|plan|destroy`, and any `terraform`/`tofu` subcommand other than `fmt`, `validate`, `test`, and `version`. No manual `~/.claude/settings.json` setup is required for Claude Code.
+
+For Codex panes, `qstack` checks `~/.codex/rules/*.rules` before starting (regardless of repository) and stops if any required `forbidden` rule is missing. Add the following rules to `~/.codex/rules/default.rules` on each machine where you run `qstack`:
+
+```python
+prefix_rule(pattern=["aws"], decision="forbidden")
+prefix_rule(pattern=["terraform", "apply"], decision="forbidden")
+prefix_rule(pattern=["terraform", "plan"], decision="forbidden")
+prefix_rule(pattern=["terraform", "destroy"], decision="forbidden")
+prefix_rule(pattern=["terraform", "import"], decision="forbidden")
+prefix_rule(pattern=["terraform", "state"], decision="forbidden")
+prefix_rule(pattern=["terraform", "refresh"], decision="forbidden")
+prefix_rule(pattern=["terraform", "force-unlock"], decision="forbidden")
+prefix_rule(pattern=["terraform", "taint"], decision="forbidden")
+prefix_rule(pattern=["terraform", "untaint"], decision="forbidden")
+prefix_rule(pattern=["terraform", "workspace"], decision="forbidden")
+prefix_rule(pattern=["terraform", "init"], decision="forbidden")
+prefix_rule(pattern=["just", "apply"], decision="forbidden")
+prefix_rule(pattern=["just", "plan"], decision="forbidden")
+prefix_rule(pattern=["just", "destroy"], decision="forbidden")
+```
+
+You can verify the local setup manually from a clone of this repo (or from `~/.claude/plugins/cache/skillbox/relubox/<hash>/`):
+
+```bash
+node skills/qstack/scripts/check-guardrails.mjs
+```
+
 ## Skills
 
 | Skill | Purpose |

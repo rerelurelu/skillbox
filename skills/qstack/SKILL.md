@@ -52,6 +52,7 @@ subagent の定義はプラグインの `agents/` にある。検証役は `relu
 2. 実行環境を確かめる。どれかを満たさなければ、足りないものを伝えて止まる。
    - `test -n "${HC_TERMINAL_SOCKET:-}"` が成功する（Herdr のアプリの中で動いている）
    - `codex` と `agy` のコマンドがある
+   - `node <このファイルのフォルダ>/scripts/check-guardrails.mjs` が成功する（Codex の `forbidden` ルールがそろっている。Claude Code 側はプラグインの `PreToolUse` フックが自動で適用される）
    - git の作業ツリーに未コミットの変更が無い
 
 3. 今いるブランチを確かめる。`main`、`master`、`develop` のどれかなら、作業ブランチを切ってから呼ぶように伝えて止まる。リポジトリの `CLAUDE.md` や `AGENTS.md` で直接コミットが認められている場合は続ける。
@@ -97,6 +98,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 - 「結果は最後の返答にすべて書く。メッセージでは送らない」（subagent の場合）
 - 文章を書く役割には `unslop` と `technical-writing` の SKILL.md の絶対パスと「コメントとドキュメントは technical-writing に従い、仕上げに unslop を当てる」
 - 「git の状態を変えるコマンド（commit、stash、checkout、reset、branch、rebase）は使わない」。worktree は stash やブランチをほかの作業ツリーと共有するため、どの役割にも入れる
+- 「サンドボックス外での実行や権限回避はしない。AWS などの外部環境や Terraform の remote state へ接続するコマンドは実行せず、ローカルで実行できない場合はそこで止まって報告する」
 
 スキルの絶対パスはこのファイルのパスから求めて依頼文に書く。
 
@@ -107,7 +109,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
   - メッセージは `technical-writing` に従う。最後のまとめ直しでそのまま残すため、作業用の仮のメッセージにしない
   - 修正の回で、既存の単位を直した変更は `git commit --fixup=<その単位のコミット>` にする。新しい単位の変更は普通にコミットする
   - コミットのあとに `git status --short` を見る。どのコミットにも入らなかったファイルが残っていたら、中身を見て決める。qstack の変更の一部ならコミットに入れる。実行でできた生成物（`__pycache__`、ビルドの出力など）なら入れずに、報告の「工程の結果」に書く
-- arena と interrogate が使う worktree はそれぞれのスキルが作る。qstack は報告のあとに interrogate の worktree を消す。
+- arena が使う worktree と interrogate が使うスナップショットはそれぞれのスキルが作る。qstack は報告のあとに interrogate のスナップショットを消す。
 - 報告の前に、開始時のコミットより後のコミットだけをまとめ直す。`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <開始時のコミット>` で、fixup コミットを元の単位のコミットに畳む。畳んだあとの各コミットが単独で成り立つ（そのコミットの時点でテストが通る）ことを確かめる。成り立たないコミットがあれば、前後のコミットとまとめる。
 - 開始時のコミットより前のコミットには触らない。push しない。
 
@@ -116,7 +118,7 @@ subagent は `run_in_background: true` で起動し、毎回新しく起動す�
 最後に 1 回だけ、次の順で書く。実行しなかった工程の行と、空の節は書かない。
 
 ```
-## 実装完了（検証が 1 つでも VERIFIED でなければ「中断」）
+## 実装完了（NOT VERIFIED が 1 つでもあれば「中断」、外部環境への接続が要る INCONCLUSIVE が残る場合は「実装完了（実環境での確認が必要）」）
 目的: <認識合わせの目的>
 開始時のコミット: <hash>（`git reset --soft <hash>` で qstack の変更を未コミットに戻せる）
 
