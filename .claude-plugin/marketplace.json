@@ -29,7 +29,8 @@
         "./agents/comment-arbiter.md",
         "./agents/overbuild-arbiter.md",
         "./agents/verifier.md"
-      ]
+      ],
+      "hooks": "./hooks/hooks.json"
     }
   ]
 }
